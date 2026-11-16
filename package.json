@@ -1,0 +1,31 @@
+{
+  "name": "learning-platform",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22.17"
+  },
+  "scripts": {
+    "dev": "pnpm db:start && concurrently --kill-others-on-fail --names api,web --prefix-colors blue,magenta \"pnpm dev:api\" \"pnpm dev:web\"",
+    "dev:api": "./scripts/dev-api.sh",
+    "dev:web": "pnpm --filter web dev",
+    "build": "pnpm build:web && pnpm build:api",
+    "build:web": "pnpm --filter web build",
+    "build:api": "cargo build --release -p lp-api",
+    "start": "pnpm db:start && WEB_DIST_DIR=apps/web/build ./target/release/learning-platform serve",
+    "db:setup": "./scripts/setup-postgres.sh",
+    "db:start": "./scripts/db.sh start",
+    "db:stop": "./scripts/db.sh stop",
+    "db:status": "./scripts/db.sh status",
+    "db:migrate": "cargo run -q -p lp-api --bin learning-platform -- migrate",
+    "courses:check": "cargo run -q -p lp-api --bin learning-platform -- check-courses",
+    "test": "pnpm test:rust && pnpm check:web",
+    "test:rust": "pnpm db:start && cargo test --workspace",
+    "check:web": "pnpm --filter web check",
+    "lint": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && pnpm check:web",
+    "fmt": "cargo fmt --all"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.7"
+  }
+}

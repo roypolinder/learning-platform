@@ -1,0 +1,260 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: semantic-matching
+version: 1.0.0
+title: Semantic matching with embeddings
+summary: Match questions to answers by meaning, not keywords, and prove it on queries that share no words with the answer.
+description: |
+  Keyword search fails the moment people use different words than your documents:
+  *"someone took my bike"* never mentions *"theft"*. Embeddings turn text into vectors
+  where similar meaning lands close together, so you can match on meaning instead.
+
+  You will build a small matcher for a bike-rental FAQ that ranks entries by cosine
+  similarity and knows when nothing matches. The platform tests it with hidden paraphrases
+  that deliberately avoid the FAQ's wording, and with questions that have no answer at all.
+category: AI foundations
+difficulty: beginner
+order: 40
+estimated_minutes: 50
+tags: [embeddings, semantic-search, similarity, nlp]
+objectives:
+  - Explain what an embedding is and why similar meanings end up close together
+  - Compute and interpret cosine similarity
+  - Rank candidates by similarity and choose a sensible "no match" threshold
+  - Recognize where lexical search still beats semantic matching
+prerequisites:
+  - title: Basic experience building a small HTTP service in any language
+extensions: [quiz, service]
+help: |
+  The learner picks any embedding model (hosted API or local). Help them understand vectors,
+  cosine similarity and thresholds. Encourage printing the scores for a few queries to build
+  intuition. Never hand them the threshold value or the full implementation.
+
+sections:
+  - id: concepts
+    title: Meaning as geometry
+    steps:
+      - id: embeddings
+        type: explanation
+        title: What an embedding is
+        estimated_minutes: 6
+        body: |
+          An **embedding model** turns a piece of text into a fixed-length list of numbers, a
+          vector with hundreds or thousands of dimensions. It is trained so that texts with
+          similar meaning get vectors pointing in similar directions.
+
+          - *"My wheel lost all its air"* and *"What do I do with a flat tyre?"* share no
+            important words, but their vectors are close.
+          - *"Bank of the river"* and *"bank account"* share a word, but their vectors are far
+            apart.
+
+          To compare two vectors we usually use **cosine similarity**: the cosine of the angle
+          between them. 1 means the same direction, 0 means unrelated, and negative means opposed.
+          Many models return normalized vectors, in which case cosine similarity is just the
+          dot product.
+
+          A few rules that hold for every embedding model:
+
+          - **Embed queries and documents with the same model.** Vectors from different
+            models (or versions) are not comparable. Switching models means re-embedding
+            everything.
+          - **Scores are relative to the model.** 0.45 can be a great match for one model and
+            noise for another. You calibrate thresholds per model.
+          - **Embed what you want to match on.** For an FAQ, the question *and* its answer
+            often work better than the question alone.
+
+      - id: lexical-vs-semantic
+        type: interactive_content
+        title: Lexical, semantic or both?
+        estimated_minutes: 5
+        config:
+          panels:
+            - title: Lexical (keyword) search
+              body: |
+                Matches exact terms, often with scoring such as BM25. Strong for product codes,
+                names, error messages and rare terms (`ERR_SSL_PROTOCOL`, `A-1042`). Blind to
+                synonyms and paraphrases.
+            - title: Semantic matching
+              body: |
+                Matches meaning via embeddings. Strong for natural questions and paraphrases,
+                also across languages with multilingual models. Weaker for exact identifiers
+                and new jargon the model never saw.
+            - title: Hybrid
+              body: |
+                Run both and merge the rankings, for example with reciprocal rank fusion. This
+                is the default in most production search and retrieval systems because it
+                covers both failure modes.
+            - title: Thresholds
+              body: |
+                A ranker always returns *something*. To say "I don't know", look at the best
+                score: below a threshold you calibrated on real queries, return no match
+                instead of a confident wrong answer.
+
+      - id: check-concepts
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 4
+        config:
+          pass_score: 0.75
+          questions:
+            - id: cosine
+              prompt: What is the cosine similarity of the vectors [1, 0] and [0, 1]?
+              explanation: They are perpendicular, so the angle is 90° and the cosine is 0 — unrelated.
+              options:
+                - { id: one, text: "1" }
+                - { id: zero, text: "0", correct: true }
+                - { id: minus, text: "-1" }
+            - id: model-change
+              prompt: You switch to a newer embedding model. What must you do with the stored document vectors?
+              explanation: Vectors from different models live in different spaces and cannot be compared.
+              options:
+                - { id: nothing, text: "Nothing, vectors are model-independent" }
+                - { id: reembed, text: "Re-embed all documents with the new model", correct: true }
+                - { id: normalize, text: "Normalize them again" }
+            - id: identifier
+              prompt: Users search for exact error codes such as ERR_QUOTA_429. Which approach handles that best?
+              explanation: Exact identifiers are lexical. Hybrid search keeps semantic matching for everything else.
+              options:
+                - { id: semantic, text: "Pure semantic matching" }
+                - { id: hybrid, text: "Hybrid: keyword matching combined with semantic matching", correct: true }
+                - { id: bigger, text: "A bigger embedding model" }
+            - id: threshold
+              prompt: Why calibrate a minimum similarity score?
+              explanation: Ranking always returns a top result; a threshold lets you answer "no match" instead of guessing.
+              options:
+                - { id: speed, text: "To make search faster" }
+                - { id: none, text: "So the system can say nothing matches instead of returning a wrong answer", correct: true }
+                - { id: storage, text: "To store fewer vectors" }
+
+  - id: build
+    title: Build the matcher
+    steps:
+      - id: faq-data
+        type: code_example
+        title: The FAQ and the contract
+        estimated_minutes: 4
+        body: |
+          Build a small HTTP service for *Velora*, a bike-rental company, in any language.
+          Use any embedding model: a hosted embeddings API or a local model.
+
+          1. At startup, embed each FAQ entry once and keep the vectors in memory. A vector
+             database is not needed for 10 items; that's the next course.
+          2. `GET /match?q=<question>` embeds the question, scores every entry with cosine
+             similarity and responds with up to **3** matches above your threshold, best first:
+
+          ```json
+          { "matches": [ { "id": "faq-flat", "score": 0.71 }, { "id": "faq-booking", "score": 0.42 } ] }
+          ```
+
+          When nothing is relevant, respond `{ "matches": [] }`.
+        config:
+          snippets:
+            - filename: faq.json
+              language: json
+              code: |
+                [
+                  { "id": "faq-booking", "question": "How can I book a bicycle ahead of time?", "answer": "Use the app or website up to 30 days before your ride. Pick the station, the date and the type of bike." },
+                  { "id": "faq-theft", "question": "What if my bike disappears while it is parked?", "answer": "Report it in the app within 24 hours. Our theft cover pays everything above a 50 euro excess if the bike was locked." },
+                  { "id": "faq-flat", "question": "What should I do with a flat tyre during my ride?", "answer": "Call roadside assistance. A mechanic reaches you within 45 minutes in the city centre, or swap the bike at any station." },
+                  { "id": "faq-kids", "question": "Do you have bicycles for children?", "answer": "Yes. We have 16 and 20 inch kids' bikes, plus child seats and trailers for toddlers." },
+                  { "id": "faq-refund", "question": "Can I get my money back if I cancel?", "answer": "Cancellations more than 24 hours ahead are refunded in full. Later cancellations get a voucher worth half the price." },
+                  { "id": "faq-ebike", "question": "How far can the electric bikes go on one charge?", "answer": "About 70 km in eco mode. You can swap batteries for free at stations with a lightning symbol." },
+                  { "id": "faq-helmet", "question": "Are helmets included?", "answer": "Helmets in three sizes are free with every rental. Ask at the counter." },
+                  { "id": "faq-group", "question": "Can I rent for a group or a company outing?", "answer": "For 8 or more riders we offer group rates and an optional guide. Contact our events team." },
+                  { "id": "faq-payment", "question": "Which payment methods do you accept?", "answer": "Cards, mobile wallets, and invoices for businesses. Cash is not accepted." },
+                  { "id": "faq-age", "question": "Is there a minimum age to rent alone?", "answer": "Riders must be 16 to rent on their own. Younger riders need an adult on the booking." }
+                ]
+
+      - id: matcher
+        type: service_check
+        title: Run the matching checks
+        estimated_minutes: 25
+        body: |
+          The platform sends hidden questions to `/match`. Most of them share no meaningful words
+          with the right FAQ entry, so keyword matching will fail them. Some have no answer in
+          the FAQ at all and should return no matches.
+
+          The format checks must all pass, and at least 70% of the meaning checks.
+        help: |
+          Common issues: embedding the query with a different model than the documents; returning
+          scores in ascending order; a threshold that is too high (no matches for paraphrases) or
+          too low (off-topic questions match). Suggest the learner prints the top scores for a few
+          of their own paraphrases and off-topic questions and picks a threshold between the two
+          groups. Embedding question and answer together often helps.
+        validation:
+          timeout_ms: 15000
+          parallel: true
+          min_pass_ratio: 0.7
+          cases:
+            - id: format
+              label: Returns at most 3 matches, best first
+              request: { path: /match, query: { q: "Do you rent bikes for kids?" } }
+              expect:
+                json:
+                  - { pointer: /matches, type: array, max_items: 3, min_items: 1 }
+                  - { pointer: /matches, field: /score, sorted: desc }
+                  - { pointer: /matches, top_k: 1, field: /id, includes: faq-kids }
+            - id: theft
+              label: “Someone took my bicycle from outside the supermarket” finds the theft entry
+              graded: true
+              request: { path: /match, query: { q: "Someone took my bicycle from outside the supermarket" } }
+              expect:
+                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-theft }]
+            - id: flat
+              label: “My wheel lost all its air” finds the flat tyre entry
+              graded: true
+              request: { path: /match, query: { q: "My wheel lost all its air halfway through the trip" } }
+              expect:
+                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-flat }]
+            - id: refund
+              label: “Will I be reimbursed if my plans change?” finds the refund entry
+              graded: true
+              request: { path: /match, query: { q: "My plans changed. Will I be reimbursed?" } }
+              expect:
+                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-refund }]
+            - id: range
+              label: “How many kilometres can the motorised one do?” finds the e-bike entry
+              graded: true
+              request: { path: /match, query: { q: "How many kilometres can the motorised one do before it's empty?" } }
+              expect:
+                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-ebike }]
+            - id: toddler
+              label: A question about a small child finds the kids entry
+              graded: true
+              request: { path: /match, query: { q: "Is there something suitable for my 6-year-old?" } }
+              expect:
+                json: [{ pointer: /matches, top_k: 2, field: /id, includes: faq-kids }]
+            - id: off-topic-food
+              label: An unrelated question about cooking returns no matches
+              graded: true
+              request: { path: /match, query: { q: "What is a good recipe for vegetable lasagna?" } }
+              expect:
+                json: [{ pointer: /matches, max_items: 0 }]
+            - id: off-topic-passport
+              label: An unrelated question about passports returns no matches
+              graded: true
+              request: { path: /match, query: { q: "How do I renew my passport?" } }
+              expect:
+                json: [{ pointer: /matches, max_items: 0 }]
+
+  - id: wrap-up
+    title: Wrap up
+    steps:
+      - id: reflection
+        type: free_text
+        title: When would keywords win?
+        optional: true
+        estimated_minutes: 3
+        config:
+          prompt: Describe a query for this FAQ where keyword search would beat your semantic matcher, and how you would combine both.
+        validation:
+          min_words: 25
+          required_concepts:
+            - label: combining both (hybrid)
+              any_of: [hybrid, combine, both, fusion, together, keyword]
+      - id: finish
+        type: automatic_completion
+        title: You match on meaning
+        depends_on: [matcher]
+        body: |
+          You can now match on meaning and know when to say "no match". The vector databases
+          course scales this to many documents, metadata filters and live updates.

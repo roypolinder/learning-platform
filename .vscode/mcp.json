@@ -1,0 +1,8 @@
+{
+    "servers": {
+        "learning-platform": {
+            "type": "http",
+            "url": "http://localhost:8080/mcp"
+        }
+    }
+}

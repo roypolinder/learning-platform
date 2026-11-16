@@ -1,0 +1,278 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: knowledge-graphs
+version: 1.0.0
+title: Knowledge graphs for AI
+summary: Extract entities and relationships from text with a model, resolve duplicates, and answer multi-hop questions that plain retrieval misses.
+description: |
+  Vector search finds passages that *look like* your question. It struggles with questions
+  that need **connections**: "In which office does the manager of the person who maintains
+  Lattice work?" No single passage contains that answer. A knowledge graph stores entities and
+  their relationships explicitly, so you can follow the chain.
+
+  You will use a model to extract a graph from a few paragraphs about a fictional company,
+  merge entities that are written differently, and expose graph queries and a question
+  endpoint. The platform checks entity resolution, relationships, shortest paths and multi-hop
+  answers.
+category: Retrieval
+difficulty: advanced
+order: 20
+estimated_minutes: 90
+tags: [knowledge-graph, graphrag, entity-resolution, information-extraction, retrieval]
+objectives:
+  - Model a domain as entities, relationships and properties with a fixed schema
+  - Extract triples from text with a model using structured output, and validate them
+  - Resolve aliases and duplicates into canonical entities
+  - Answer multi-hop questions by traversing the graph, alone or combined with retrieval
+prerequisites:
+  - title: Retrieval-augmented generation (RAG)
+    course: rag-fundamentals
+extensions: [quiz, service]
+help: |
+  The learner can store the graph in a graph database, in SQL tables, or in memory, and uses
+  any model for extraction. Help them define the schema first, extract with structured output,
+  check the extracted triples by hand once, and handle aliases. Encourage inspecting the graph
+  (print all edges) before debugging queries. Don't write the extraction prompt or the graph code
+  for them.
+
+sections:
+  - id: concepts
+    title: Graphs and AI
+    steps:
+      - id: graphs
+        type: explanation
+        title: Entities, relationships, traversals
+        estimated_minutes: 7
+        body: |
+          A knowledge graph stores facts as **triples**: *(subject, relationship, object)*, for
+          example *(Jonas Weber, MAINTAINS, Lattice)*. Entities have a type (Person, Project,
+          System, …) and properties; relationships have a type and a direction.
+
+          Why AI systems use them:
+
+          - **Multi-hop questions.** Follow edges: Lattice ← MAINTAINS ← Jonas ← MANAGES ← Mira
+            → BASED_IN → Lisbon. Each hop is exact, not a similarity guess.
+          - **Aggregation and completeness.** "Everyone who works on Halcyon" is a query, not
+            the top 5 most similar passages.
+          - **Explainability.** The path *is* the explanation.
+
+          Models have made graphs much cheaper to build. Instead of hand-written rules, a model
+          reads text and emits triples that follow a **schema you define**: allowed entity
+          types and relationship types. Constraining the schema is what keeps the graph clean.
+
+          **GraphRAG** combines both worlds: find the relevant entities (often by vector search),
+          expand their neighbourhood in the graph, and give the model those facts as context.
+
+      - id: pitfalls
+        type: interactive_content
+        title: The hard parts
+        estimated_minutes: 6
+        config:
+          panels:
+            - title: Entity resolution
+              body: |
+                "Mira Okafor", "M. Okafor" and "Mira" are the same person; "Halcyon" and
+                "Project Halcyon" are the same project. Without merging, your graph is full of
+                disconnected duplicates. Keep a canonical name and a list of aliases.
+            - title: Schema discipline
+              body: |
+                Let a model invent relationship types freely and you get WORKS_ON, WORKS_AT,
+                IS_WORKING_ON and CONTRIBUTES_TO for the same idea. Give it a closed list and
+                reject anything else.
+            - title: Provenance
+              body: |
+                Store which text each triple came from. When an answer is wrong, you can trace
+                it to the extraction, and you can re-extract when the source changes.
+            - title: Direction
+              body: |
+                *(Mira, MANAGES, Jonas)* is not *(Jonas, MANAGES, Mira)*. Decide direction
+                conventions in the schema, and query in both directions when the question needs it.
+
+      - id: check-concepts
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 4
+        config:
+          pass_score: 0.75
+          questions:
+            - id: multi-hop
+              prompt: Which question benefits most from a knowledge graph over plain vector search?
+              explanation: Multi-hop questions require combining facts from different places by following relationships.
+              options:
+                - { id: hop, text: "Which office does the manager of Lattice's maintainer work in?", correct: true }
+                - { id: def, text: "What is Lattice?" }
+                - { id: summary, text: "Summarize the onboarding document." }
+            - id: resolution
+              prompt: Your graph has separate nodes for "M. Okafor" and "Mira Okafor". What is this problem called?
+              explanation: Entity resolution merges different mentions of the same real-world entity.
+              options:
+                - { id: er, text: "Entity resolution", correct: true }
+                - { id: chunking, text: "Chunking" }
+                - { id: drift, text: "Embedding drift" }
+            - id: schema
+              prompt: Why give the extraction model a closed list of relationship types?
+              explanation: A closed schema prevents near-duplicate relationship types and keeps queries reliable.
+              options:
+                - { id: consistent, text: "To keep relationships consistent and queryable", correct: true }
+                - { id: faster, text: "To make the model faster" }
+                - { id: cheaper, text: "Graph databases require it" }
+            - id: graphrag
+              prompt: What does GraphRAG add to standard RAG?
+              explanation: It retrieves connected facts from the graph (neighbourhoods, paths) as context, not just similar passages.
+              options:
+                - { id: neighbours, text: "Context from connected entities and relationships", correct: true }
+                - { id: images, text: "Image understanding" }
+                - { id: training, text: "Fine-tuning the model on the graph" }
+
+  - id: build
+    title: Build the graph
+    steps:
+      - id: source
+        type: code_example
+        title: The source text, schema and contract
+        estimated_minutes: 6
+        body: |
+          Extract a graph from the *Aster Collective* notes below with any model, using this
+          schema:
+
+          - **Entity types:** `Person`, `Team`, `Project`, `System`, `Office`, `Technology`
+          - **Relationship types:** `MANAGES`, `LEADS`, `WORKS_ON`, `MAINTAINS`, `USES`,
+            `DEPENDS_ON`, `BASED_IN`, `WRITTEN_IN`
+
+          Store it however you like and expose an HTTP service:
+
+          - `GET /entity?name=<name or alias>` returns
+            `{"name": "<canonical name>", "type": "Person", "aliases": [...]}`, or **404**
+            if unknown.
+          - `GET /neighbors?entity=<name>&relation=<TYPE>&direction=out|in` (default `out`)
+            returns `{"neighbors": [{"name": "...", "type": "..."}]}`.
+          - `GET /path?from=<name>&to=<name>` returns the shortest path, ignoring direction:
+            `{"path": ["A", "B", "C"]}`.
+          - `POST /ask` with `{"question": "..."}` returns `{"answer": "..."}` by using the graph.
+
+          Canonical names are the full names: `Mira Okafor`, `Project Halcyon`, `Lattice`,
+          `Lisbon office`, and so on.
+        config:
+          snippets:
+            - filename: notes.md
+              language: markdown
+              code: |
+                Mira Okafor leads the Platform team at Aster Collective and is based in the Lisbon office.
+                She manages Jonas Weber and Priya Nair.
+
+                Jonas Weber maintains Lattice, the internal event bus. Lattice is written in Rust and
+                depends on Postgres.
+
+                Priya Nair works on Project Halcyon, a customer analytics initiative. Halcyon uses Lattice
+                to receive events.
+
+                Dr. Samuel Achebe heads the Research team from the Nairobi office and manages Lena Kowalski.
+                Lena works on Project Halcyon's privacy review together with Priya.
+
+                In meeting notes, Mira is often written as "M. Okafor", and Project Halcyon is usually just
+                called "Halcyon".
+
+                Tomas Lindqvist joined in 2026 as a data engineer in the Lisbon office. He reports to Mira
+                and works on Halcyon as well.
+
+      - id: graph-service
+        type: service_check
+        title: Run the graph checks
+        estimated_minutes: 50
+        body: |
+          The platform checks alias resolution, unknown entities, relationships in both
+          directions, a shortest path and two multi-hop questions. The unknown-entity check must
+          pass, plus at least 70% of the others.
+        help: |
+          Have the learner print every extracted triple and compare it with the text by hand.
+          Missing edges are usually extraction problems (e.g. "reports to Mira" should become
+          Mira MANAGES Tomas, so direction matters). Alias lookups fail when entity resolution
+          runs after storing instead of before. For /path, a breadth-first search over edges in
+          both directions is enough. Don't give them the triples.
+        validation:
+          timeout_ms: 45000
+          parallel: true
+          min_pass_ratio: 0.7
+          cases:
+            - id: unknown
+              label: Unknown entities return 404 instead of a guess
+              request: { path: /entity, query: { name: Gandalf the Grey } }
+              expect: { status: 404 }
+            - id: alias-person
+              label: Resolves “M. Okafor” to Mira Okafor
+              graded: true
+              request: { path: /entity, query: { name: M. Okafor } }
+              expect:
+                json:
+                  - { pointer: /name, equals: Mira Okafor }
+                  - { pointer: /type, equals: Person }
+            - id: alias-project
+              label: Resolves “Halcyon” to Project Halcyon
+              graded: true
+              request: { path: /entity, query: { name: Halcyon } }
+              expect:
+                json:
+                  - { pointer: /name, equals: Project Halcyon }
+                  - { pointer: /type, equals: Project }
+            - id: manages
+              label: Finds everyone Mira manages, including the indirect mention
+              graded: true
+              request: { path: /neighbors, query: { entity: Mira Okafor, relation: MANAGES } }
+              expect:
+                json:
+                  - { pointer: /neighbors, field: /name, includes_all: [Jonas Weber, Priya Nair, Tomas Lindqvist] }
+                  - { pointer: /neighbors, field: /name, excludes: Lena Kowalski }
+            - id: incoming
+              label: Follows a relationship in the incoming direction
+              graded: true
+              request: { path: /neighbors, query: { entity: Lattice, relation: USES, direction: in } }
+              expect:
+                json: [{ pointer: /neighbors, field: /name, includes: Project Halcyon }]
+            - id: path
+              label: Finds the shortest path from Jonas Weber to Project Halcyon
+              graded: true
+              request: { path: /path, query: { from: Jonas Weber, to: Project Halcyon } }
+              expect:
+                json:
+                  - { pointer: /path, max_items: 3, in_order: [Jonas Weber, Lattice, Project Halcyon] }
+            - id: multi-hop-office
+              label: Answers a three-hop question
+              graded: true
+              request:
+                method: POST
+                path: /ask
+                json: { question: "In which office does the manager of the person who maintains Lattice work?" }
+              expect:
+                json: [{ pointer: /answer, contains: Lisbon }]
+            - id: multi-hop-people
+              label: Answers a question that needs every connected person
+              graded: true
+              request:
+                method: POST
+                path: /ask
+                json: { question: "Who works on the project that uses Lattice?" }
+              expect:
+                json:
+                  - { pointer: /answer, contains_all: [Priya, Tomas, Lena] }
+
+  - id: wrap-up
+    title: Wrap up
+    steps:
+      - id: reflection
+        type: free_text
+        title: Graph, vectors or both?
+        optional: true
+        estimated_minutes: 3
+        config:
+          prompt: For a question-answering system over your own company's documents, which questions would you route to the graph and which to vector search?
+        validation:
+          min_words: 30
+          required_concepts:
+            - label: relationships or multi-hop questions
+              any_of: [relationship, multi-hop, connected, path, who, hops, traverse]
+      - id: finish
+        type: automatic_completion
+        title: Connected knowledge
+        depends_on: [graph-service]
+        body: |
+          You turned text into a queryable graph and used it for questions that need connections.
+          Combine it with the RAG pipeline you built for a GraphRAG system.

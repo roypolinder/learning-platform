@@ -1,0 +1,276 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: build-mcp-server
+version: 1.1.0
+title: Build your own MCP server
+summary: Expose your own data as MCP tools over Streamable HTTP, and let the platform connect to it as a client.
+description: |
+  In the first MCP course you connected an agent to someone else's server. Now you build one.
+  Any MCP-capable agent, in any editor or app, can then use your data and actions without
+  custom integration work.
+
+  You will use an official MCP SDK in the language of your choice to build a server for a small
+  library catalog, with well-described tools, structured output and proper errors. The
+  platform connects to it as an MCP client, lists your tools and calls them with arguments you
+  haven't seen.
+category: AI tooling
+difficulty: intermediate
+order: 60
+estimated_minutes: 60
+tags: [mcp, model-context-protocol, tools, streamable-http, agents]
+objectives:
+  - Implement an MCP server with tools over the Streamable HTTP transport
+  - Write tool definitions with input and output schemas, and annotations
+  - Return tool errors that a model can act on
+  - Secure a remote MCP server appropriately
+prerequisites:
+  - title: Connect your AI agent over MCP
+    course: mcp-first-connection
+  - title: Tool calling from first principles
+    course: tool-calling-fundamentals
+extensions: [quiz, service]
+help: |
+  The learner uses an official MCP SDK in a language of their choice. Help them find the SDK's
+  Streamable HTTP server example, register tools with input and output schemas, and test the
+  server with an MCP inspector or their own agent before running the check. Don't write the
+  server for them.
+
+sections:
+  - id: concepts
+    title: Anatomy of an MCP server
+    steps:
+      - id: lifecycle
+        type: explanation
+        title: What happens on the wire
+        estimated_minutes: 7
+        body: |
+          An MCP server speaks JSON-RPC 2.0. With the **Streamable HTTP** transport, the
+          client POSTs every message to one endpoint (by convention `/mcp`), and the server
+          answers with plain JSON or a short stream of server-sent events.
+
+          1. **initialize**: the client sends its protocol version and capabilities; the server
+             answers with its own and may return an `Mcp-Session-Id` header that the client
+             sends on every later request.
+          2. **notifications/initialized**: the client confirms. Now real work can start.
+          3. **tools/list**: the client asks which tools exist. Each has a `name`, a
+             `description`, an `inputSchema` and optionally an `outputSchema` and
+             `annotations`.
+          4. **tools/call**: the client calls a tool with arguments and gets back `content`
+             (text, images, …), optionally `structuredContent` matching the output schema, and
+             `isError` when the tool failed.
+
+          Besides tools, servers can offer **resources** (data the application can attach) and
+          **prompts** (templates the user picks). Clients don't all support every feature, so
+          tools are the most portable.
+
+          You don't implement any of this by hand. The official SDKs handle the protocol; you
+          register tools and write their handlers.
+
+      - id: design
+        type: interactive_content
+        title: Designing tools that agents use well
+        estimated_minutes: 6
+        config:
+          panels:
+            - title: Fewer, sharper tools
+              body: |
+                Every tool definition costs context in every request. Prefer a few tools
+                built around user tasks (`search_books`) over one tool per database table or
+                API endpoint.
+            - title: Output schemas
+              body: |
+                Declare an `outputSchema` and return matching `structuredContent` alongside a
+                readable text version. Clients can then validate and use the data directly.
+            - title: Annotations
+              body: |
+                Hints such as `readOnlyHint`, `destructiveHint` and `idempotentHint` help clients
+                decide when to ask the user for confirmation. They are hints, not security:
+                the server still enforces what's allowed.
+            - title: Errors
+              body: |
+                A tool that fails returns a normal result with `isError: true` and a message
+                the model can act on: "No book with ISBN 123. Use search_books to find the
+                ISBN." Protocol errors are for broken requests, not business failures.
+            - title: Security
+              body: |
+                Remote servers need authentication (OAuth for user-facing servers), must
+                validate the `Origin` header to block DNS rebinding, and should bind to
+                localhost when they're only meant for local use. Never pass a client's token
+                through to other services.
+
+      - id: check-concepts
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 4
+        config:
+          pass_score: 0.75
+          questions:
+            - id: first
+              prompt: Which request must a client send before it can list or call tools?
+              explanation: Every session starts with initialize, followed by the initialized notification.
+              options:
+                - { id: init, text: "initialize", correct: true }
+                - { id: list, text: "tools/list" }
+                - { id: auth, text: "authorize" }
+            - id: not-found
+              prompt: get_book is called with an ISBN that doesn't exist. What should the server return?
+              explanation: Business failures are tool results with isError true and a helpful message, so the model can recover.
+              options:
+                - { id: rpc, text: "A JSON-RPC protocol error" }
+                - { id: is-error, text: "A tool result with isError true and a helpful message", correct: true }
+                - { id: http, text: "HTTP 404" }
+            - id: annotations
+              prompt: What does readOnlyHint true on a tool tell the client?
+              explanation: It hints the tool doesn't modify anything, so a client may run it without asking. The server must still enforce access.
+              options:
+                - { id: safe, text: "The tool doesn't change anything, so it may be safe to run without confirmation", correct: true }
+                - { id: cache, text: "The result can be cached forever" }
+                - { id: enforce, text: "The server guarantees users can't write data" }
+            - id: origin
+              prompt: Why should an HTTP MCP server validate the Origin header?
+              explanation: It blocks DNS rebinding attacks where a web page talks to a server on your machine.
+              options:
+                - { id: rebinding, text: "To block websites from reaching a local server through DNS rebinding", correct: true }
+                - { id: cors, text: "To make responses faster" }
+                - { id: version, text: "To negotiate the protocol version" }
+
+  - id: build
+    title: Build the server
+    steps:
+      - id: catalog
+        type: code_example
+        title: The catalog and the tools
+        estimated_minutes: 5
+        body: |
+          Build an MCP server for the *Harbor Street Library* with the Streamable HTTP transport,
+          served at `/mcp`. Hardcode the catalog below.
+
+          **`search_books`**: input `query` (required, string) and `available_only` (optional,
+          boolean). Finds books whose title or author contains the query, case-insensitive.
+          Returns the matching titles with their ISBNs, or a message that nothing matched.
+
+          **`get_book`**: input `isbn` (required, string). Returns all fields of one book as
+          text and as `structuredContent`, and declares an `outputSchema` (an object with at least
+          `isbn`, `title`, `author`, `year` and `available`). An unknown ISBN returns
+          `isError: true` with a message that suggests using `search_books`.
+
+          Both tools need clear descriptions (at least 40 characters) and the annotation
+          `readOnlyHint: true`.
+        config:
+          snippets:
+            - filename: catalog.json
+              language: json
+              code: |
+                [
+                  { "isbn": "9990000000017", "title": "The Lighthouse Ledger", "author": "Mara Ellison", "year": 2019, "available": 2 },
+                  { "isbn": "9990000000024", "title": "Gardens of Quiet Iron", "author": "Tomas Reyes", "year": 2021, "available": 0 },
+                  { "isbn": "9990000000031", "title": "A Short History of Tides", "author": "Ines Halvorsen", "year": 2015, "available": 1 },
+                  { "isbn": "9990000000048", "title": "Copper Skies", "author": "Leo Brandt", "year": 2023, "available": 3 },
+                  { "isbn": "9990000000055", "title": "The Cartographer's Daughter", "author": "Amina Okoye", "year": 2020, "available": 0 },
+                  { "isbn": "9990000000062", "title": "Recipes for Rainy Planets", "author": "Jun Takeda", "year": 2024, "available": 4 }
+                ]
+
+      - id: try-it
+        type: manual_completion
+        title: Try it with your own agent
+        optional: true
+        estimated_minutes: 5
+        body: |
+          Add your server next to `learning-platform` in `.vscode/mcp.json`:
+
+          ```json
+          {
+            "servers": {
+              "learning-platform": { "type": "http", "url": "http://localhost:8080/mcp" },
+              "library": { "type": "http", "url": "http://localhost:3000/mcp" }
+            }
+          }
+          ```
+
+          Ask your agent *"Which books by Mara Ellison can I borrow right now?"* and watch which
+          tools it calls. Mark this step done when it works.
+
+      - id: server
+        type: mcp_server_check
+        title: Run the MCP checks
+        estimated_minutes: 30
+        depends_on: [catalog]
+        body: |
+          Start your server and enter its base URL, for example `http://localhost:3000`. The
+          platform completes the handshake, checks your tool definitions and calls the tools
+          with ISBNs and queries you haven't seen.
+        help: |
+          If the handshake fails, check that the server listens on /mcp with the Streamable HTTP
+          transport (not stdio or the old SSE transport) and doesn't reject requests without an
+          Origin header. If a tool check fails, compare the tools/list output with the requirements:
+          descriptions, required parameters, outputSchema, annotations. If the unknown ISBN check
+          fails, the handler probably throws instead of returning isError. An MCP inspector is a good
+          way to see the raw messages.
+        config:
+          path: /mcp
+        validation:
+          timeout_ms: 10000
+          tools:
+            - name: search_books
+              required_params: [query]
+              min_description_length: 40
+              json:
+                - { pointer: /annotations/readOnlyHint, equals: true }
+            - name: get_book
+              required_params: [isbn]
+              min_description_length: 40
+              json:
+                - { pointer: /annotations/readOnlyHint, equals: true }
+                - { pointer: /outputSchema/type, equals: object }
+          calls:
+            - id: get-known
+              label: get_book returns the right book with structured content
+              tool: get_book
+              arguments: { isbn: "9990000000031" }
+              text_contains_any: ["A Short History of Tides"]
+              json:
+                - { pointer: /structuredContent/title, equals: "A Short History of Tides" }
+                - { pointer: /structuredContent/available, equals: 1 }
+            - id: get-unknown
+              label: get_book reports an unknown ISBN as a tool error
+              tool: get_book
+              arguments: { isbn: "1234567890123" }
+              expect_error: true
+            - id: search-title
+              label: search_books finds a book by part of its title
+              tool: search_books
+              arguments: { query: copper }
+              text_contains_any: ["Copper Skies"]
+            - id: search-author
+              label: search_books finds a book by author, case-insensitive
+              tool: search_books
+              arguments: { query: OKOYE }
+              text_contains_any: ["Cartographer"]
+            - id: available-only
+              label: search_books can hide books with no copies available
+              tool: search_books
+              arguments: { query: gardens, available_only: true }
+              json:
+                - { pointer: /content/0/text, not_contains_any: ["Gardens of Quiet Iron"] }
+
+  - id: wrap-up
+    title: Wrap up
+    steps:
+      - id: reflection
+        type: free_text
+        title: Make it safe to share
+        optional: true
+        estimated_minutes: 3
+        config:
+          prompt: Your server will be used by colleagues over the network and gets a reserve_book tool. What do you change for security?
+        validation:
+          min_words: 25
+          required_concepts:
+            - label: authentication or authorization
+              any_of: [auth, oauth, token, login, permission, authorization, authentication]
+      - id: finish
+        type: automatic_completion
+        title: You ship MCP servers
+        depends_on: [server]
+        body: |
+          Any MCP-capable agent can now use your catalog. The same pattern works for your internal
+          APIs, databases and tools.

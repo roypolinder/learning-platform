@@ -1,0 +1,47 @@
+[package]
+name = "lp-api"
+description = "HTTP API, MCP gateway and persistence for the learning platform"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "learning-platform"
+path = "src/main.rs"
+
+[dependencies]
+lp-core.workspace = true
+lp-course-engine.workspace = true
+lp-extensions.workspace = true
+
+argon2 = "0.6"
+async-trait.workspace = true
+axum = { version = "0.8", default-features = false, features = ["form", "http1", "json", "query", "tokio", "tracing"] }
+base64 = "0.23"
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde", "std"] }
+dotenvy = "0.15"
+getrandom = "0.4"
+http = "1"
+rmcp = { version = "3.10", default-features = false, features = ["server", "macros", "schemars", "transport-streamable-http-server"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.11"
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-none", "postgres", "uuid", "chrono", "json", "migrate", "macros", "derive"] }
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-util = "0.7"
+tower = { version = "0.5", default-features = false, features = ["util"] }
+tower-http = { version = "0.7", features = ["fs", "trace", "limit", "timeout", "set-header", "compression-gzip"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "ansi"] }
+url = "2"
+uuid = { version = "1", features = ["v7", "serde"] }
+
+[dev-dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
+rmcp = { version = "3.10", default-features = false, features = ["client", "transport-streamable-http-client-reqwest", "reqwest"] }
+
+[lints]
+workspace = true

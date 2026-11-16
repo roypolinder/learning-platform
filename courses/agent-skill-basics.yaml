@@ -1,0 +1,182 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: agent-skill-basics
+version: 1.1.0
+title: Create an AI agent skill
+summary: Package team know-how as a skill your coding agent loads exactly when it is needed.
+description: |
+  Skills are folders with a `SKILL.md` file that teach an agent how to perform a specific task:
+  your release checklist, your migration conventions, the way your team reviews pull requests.
+  You will learn what makes a skill effective, write one with your own agent, and let the
+  platform verify its structure.
+category: AI agents
+difficulty: beginner
+order: 30
+estimated_minutes: 30
+tags: [skills, agents, copilot]
+objectives:
+  - Describe how agents discover and load skills
+  - Write a precise skill description that triggers at the right time
+  - Structure skill instructions as concrete, verifiable steps
+prerequisites:
+  - title: Connect your AI agent over MCP
+    course: mcp-first-connection
+extensions: [quiz, mcp, filesystem]
+help: |
+  The learner writes a skill for a task from their own work. Ask them which task they repeat
+  and what a good result looks like, then help them sharpen the description and turn the
+  instructions into concrete, verifiable steps. Don't write the skill for them.
+
+shared_sections:
+  agent-connection:
+    description: Ensures the learner's agent is connected before agent-driven checks.
+    steps:
+      - id: reconnect
+        type: mcp_connection_check
+        title: Confirm your agent is connected
+        body: |
+          This course asks your agent to submit files. Make sure the `learning-platform` server
+          from the MCP course is running (choose **Authenticate** if VS Code says it needs
+          authentication), then ask your agent: **"What is my current step on the learning platform?"**
+        config:
+          server_name: learning-platform
+
+sections:
+  - id: learn
+    title: What makes a good skill
+    steps:
+      - id: what-are-skills
+        type: explanation
+        title: Skills in one minute
+        estimated_minutes: 4
+        body: |
+          A skill is a directory containing a `SKILL.md` file and, optionally, scripts or reference
+          files. In VS Code they live in `.github/skills/<skill-name>/`.
+
+          Agents don't read every skill up front. At startup they only see each skill's **name and
+          description** from the YAML frontmatter. When a request matches a description, the agent
+          loads the full instructions. This *progressive disclosure* keeps the context window small
+          while giving the agent access to a lot of expertise.
+
+          Consequences for authors:
+
+          - The **description** decides whether your skill is ever used. Say what it does *and*
+            when to use it.
+          - The **body** should read like a runbook: concrete steps, commands, and how to check
+            the result — not an essay.
+
+      - id: anatomy
+        type: code_example
+        title: Anatomy of SKILL.md
+        estimated_minutes: 3
+        config:
+          snippets:
+            - filename: .github/skills/release-notes/SKILL.md
+              language: markdown
+              caption: Frontmatter for discovery, body for execution.
+              code: |
+                ---
+                name: release-notes
+                description: Drafts release notes from merged pull requests. Use when preparing a release or when asked what changed since the last tag.
+                ---
+
+                # Release notes
+
+                ## When to use
+                Before tagging a release, or when someone asks what changed.
+
+                ## Steps
+                1. Find the previous tag with `git describe --tags --abbrev=0`.
+                2. List merged PRs since that tag with `gh pr list --state merged --search "merged:>DATE"`.
+                3. Group changes into Features, Fixes and Internal.
+                4. Write one line per change, linking the PR.
+
+                ## Verify
+                - Every merged PR appears exactly once.
+                - No internal-only changes are listed under Features.
+
+      - id: good-description
+        type: multiple_choice
+        title: Pick the best description
+        estimated_minutes: 2
+        config:
+          prompt: Which description gives an agent the best chance to load the skill at the right moment?
+          explanation: Good descriptions state the capability and the trigger conditions in concrete terms.
+          options:
+            - id: vague
+              text: Helps with database stuff.
+              explanation: Too vague — the agent cannot tell when this applies.
+            - id: precise
+              text: Creates and reviews PostgreSQL migrations using our naming rules. Use when adding tables, columns or indexes.
+              correct: true
+            - id: long
+              text: This skill is a comprehensive, enterprise-grade, best-in-class solution for all data needs.
+              explanation: Marketing language without triggers or scope.
+
+  - id: build
+    title: Build your skill
+    steps:
+      - id: connection
+        type: reusable_section
+        title: Agent connection
+        config:
+          section: agent-connection
+
+      - id: write-skill
+        type: filesystem_validation
+        title: Write a skill with your agent
+        estimated_minutes: 12
+        body: |
+          Pick a task you repeat at work — reviewing a migration, preparing a demo environment,
+          triaging a bug report. Ask your agent to help you write a skill for it in
+          `.github/skills/<name>/SKILL.md`.
+
+          When you are happy with it, ask: **"Submit my skill to the learning platform for step
+          write-skill."** The agent sends the file through `report_task_result`.
+
+          The platform checks that:
+
+          - the file has YAML frontmatter with a `name` and a `description` (max 1024 characters)
+          - there is a `## When to use` section and a `## Steps` section
+          - the instructions are substantial enough to be useful
+        help: |
+          Check the frontmatter syntax (three dashes before and after, `name:` and `description:`),
+          the exact section headings and whether the description says both what the skill does and
+          when to use it.
+        validation:
+          files:
+            - path: "**/SKILL.md"
+              label: SKILL.md
+              min_length: 300
+              contains: ["## When to use", "## Steps"]
+              frontmatter:
+                required: [name, description]
+                max_length: { name: 64, description: 1024 }
+
+  - id: reflect
+    title: Reflect
+    steps:
+      - id: trigger-explanation
+        type: free_text
+        title: When does your skill load?
+        estimated_minutes: 3
+        config:
+          prompt: Describe a request that should make an agent load your skill, and one that should not.
+        validation:
+          min_words: 25
+          required_concepts:
+            - label: the description or trigger
+              any_of: [description, trigger, when]
+
+      - id: share
+        type: manual_completion
+        title: Share it with your team
+        optional: true
+        body: |
+          Commit the skill to your repository so everyone using an agent in that repository
+          benefits. Mark this step done once it is merged.
+
+      - id: finish
+        type: automatic_completion
+        title: Skill shipped
+        depends_on: [trigger-explanation]
+        body: Your agent now knows something it didn't this morning.

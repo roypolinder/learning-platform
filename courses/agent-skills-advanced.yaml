@@ -1,0 +1,307 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: agent-skills-advanced
+version: 1.0.0
+title: "Advanced skills: scripts, references and evals"
+summary: Build a skill that bundles a deterministic script and reference material, test when it triggers, and prove its output is exactly right.
+description: |
+  Simple skills are instructions. Powerful skills also bundle **scripts** for work models are
+  bad at (exact arithmetic, parsing, file conversions), **reference files** the agent loads
+  only when needed, and **evals** that show the skill triggers at the right moments.
+
+  You will build an `expense-report` skill with your agent, run it on a fixed set of expenses
+  and submit the result. The platform checks the skill's structure and that the output matches
+  the exact totals to the cent.
+category: AI agents
+difficulty: intermediate
+order: 50
+estimated_minutes: 60
+tags: [skills, agents, progressive-disclosure, evals, scripts]
+objectives:
+  - Structure a skill with scripts, references and assets for progressive disclosure
+  - Move deterministic work out of the model and into scripts
+  - Write trigger evals that show when a skill should and should not load
+  - Review third-party skills for security risks before installing them
+prerequisites:
+  - title: Create an AI agent skill
+    course: agent-skill-basics
+extensions: [quiz, mcp, filesystem]
+help: |
+  The learner writes the skill together with their own agent. Help them decide what belongs in
+  SKILL.md, what in references/ and what in scripts/. For the totals, steer them to compute them
+  with the script, not by asking the model to add numbers. Don't write the script or the skill
+  for them.
+
+shared_sections:
+  agent-connection:
+    description: Ensures the learner's agent is connected before agent-driven checks.
+    steps:
+      - id: reconnect
+        type: mcp_connection_check
+        title: Confirm your agent is connected
+        body: |
+          This course asks your agent to submit files. Make sure the `learning-platform` server
+          is connected (choose **Authenticate** if your editor says it needs authentication),
+          then ask your agent: **"What is my current step on the learning platform?"**
+        config:
+          server_name: learning-platform
+
+sections:
+  - id: learn
+    title: Beyond SKILL.md
+    steps:
+      - id: anatomy
+        type: explanation
+        title: Three levels of loading
+        estimated_minutes: 6
+        body: |
+          Skills are an open, portable format: a folder with a `SKILL.md` that many agents can
+          load. Where the folder lives depends on your agent, but the layout is the same:
+
+          ```text
+          expense-report/
+          ├── SKILL.md            # name + description (always visible), instructions (loaded on use)
+          ├── scripts/
+          │   └── summarize.py    # executed, not read: exact, repeatable work
+          ├── references/
+          │   └── policy.md       # read only when the instructions point to it
+          └── evals/
+              └── evals.json      # when should the skill trigger, and what should it produce?
+          ```
+
+          Agents load skills in **levels**, so a skill can be large without filling the context:
+
+          1. **Metadata.** The `name` and `description` of every skill are always in context.
+          2. **Instructions.** The body of `SKILL.md` is loaded when the description matches.
+          3. **Resources.** Files in `references/` are read, and `scripts/` are *run*, only when
+             the instructions call for them. A script's code never has to enter the context;
+             only its output does.
+
+          Keep `SKILL.md` short and procedural, and link to references for details: *"For the
+          full meal policy, read `references/policy.md`."*
+
+      - id: scripts-and-safety
+        type: interactive_content
+        title: Scripts, evals and safety
+        estimated_minutes: 6
+        config:
+          panels:
+            - title: Why scripts
+              body: |
+                Models are great at deciding *what* to do and poor at exact repetitive work.
+                Summing 200 amounts, validating a schema or converting a file belongs in a
+                script: it's faster, cheaper and the same every time.
+            - title: Trigger evals
+              body: |
+                A skill that never loads is useless; one that loads for everything is noise.
+                Keep a small set of prompts that *should* trigger it and near-misses that
+                *should not*, and rerun them when you change the description.
+            - title: Output evals
+              body: |
+                For prompts that should trigger, write down what a correct result looks like,
+                ideally something checkable like exact totals. That's what the platform does
+                with your submission in this course.
+            - title: Security
+              body: |
+                A skill can make an agent run code. Only install skills from sources you trust,
+                read their scripts before installing them, and prefer skills that need
+                minimal permissions. Treat a skill like a dependency.
+
+      - id: check-concepts
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 4
+        config:
+          pass_score: 0.75
+          questions:
+            - id: always-loaded
+              prompt: Which part of a skill is in the agent's context at all times?
+              explanation: Only the metadata (name and description) is always loaded; everything else is loaded on demand.
+              options:
+                - { id: meta, text: "The name and description from the frontmatter", correct: true }
+                - { id: body, text: "The entire SKILL.md" }
+                - { id: all, text: "Every file in the skill folder" }
+            - id: arithmetic
+              prompt: The skill must total 200 expense lines exactly. Where should that happen?
+              explanation: Deterministic work belongs in a script; the model decides when to run it and explains the result.
+              options:
+                - { id: model, text: "In the model's reasoning" }
+                - { id: script, text: "In a bundled script the agent runs", correct: true }
+                - { id: reference, text: "In a reference file" }
+            - id: negative
+              prompt: Why include prompts that should NOT trigger the skill in your evals?
+              explanation: Near-misses catch descriptions that are too broad and make the skill load when it shouldn't.
+              options:
+                - { id: broad, text: "To catch descriptions that are too broad", correct: true }
+                - { id: speed, text: "To make the agent faster" }
+                - { id: none, text: "They aren't useful" }
+            - id: install
+              prompt: A colleague shares a skill from the internet. What do you do before installing it?
+              explanation: Skills can make an agent run code. Review scripts and instructions like any dependency.
+              options:
+                - { id: review, text: "Read its instructions and scripts, and check where it comes from", correct: true }
+                - { id: install, text: "Install it; skills are only text" }
+
+  - id: build
+    title: Build the expense-report skill
+    steps:
+      - id: connection
+        type: reusable_section
+        title: Agent connection
+        config:
+          section: agent-connection
+
+      - id: requirements
+        type: code_example
+        title: The requirements and the data
+        estimated_minutes: 4
+        body: |
+          Build a skill named **`expense-report`** with your agent. It turns an expenses CSV into
+          a summary. Requirements:
+
+          - `SKILL.md` has `name` and `description` frontmatter, a `## Steps` section, and
+            mentions both `scripts/` and `references/`. Keep it under 5,000 characters.
+          - A script in `scripts/` (any language) reads the CSV and prints the summary JSON.
+          - `references/policy.md` holds the expense policy below.
+          - `evals/evals.json` holds trigger evals (next steps).
+
+          **Policy:** a single *meals* expense above **35.00 EUR** is over the limit (exactly 35.00
+          is fine). Round every total to 2 decimals.
+
+          The summary JSON looks like this (with different numbers):
+
+          ```json
+          {
+            "total": 100.5,
+            "by_category": { "travel": 50.25, "meals": 30.0, "software": 10.0, "office": 10.25 },
+            "over_limit": ["E-99"]
+          }
+          ```
+        config:
+          snippets:
+            - filename: expenses.csv
+              language: csv
+              code: |
+                id,date,category,description,amount_eur
+                E-01,2026-10-01,travel,Train Utrecht to Brussels,89.40
+                E-02,2026-10-01,meals,Dinner with client,42.10
+                E-03,2026-10-02,meals,Lunch,18.75
+                E-04,2026-10-02,travel,Hotel Brussels (1 night),148.00
+                E-05,2026-10-03,software,Diagram tool subscription,12.99
+                E-06,2026-10-03,office,Notebooks and pens,23.45
+                E-07,2026-10-04,meals,Team breakfast,64.30
+                E-08,2026-10-05,travel,Taxi to the station,27.65
+                E-09,2026-10-06,software,Font license,49.00
+                E-10,2026-10-06,meals,Coffee,6.80
+                E-11,2026-10-07,office,Desk lamp,34.95
+                E-12,2026-10-08,meals,Dinner,35.00
+
+      - id: skill-files
+        type: filesystem_validation
+        title: Submit the skill
+        estimated_minutes: 15
+        body: |
+          Ask your agent: **"Submit the files of my expense-report skill (SKILL.md, the script and
+          references/policy.md) to the learning platform for step skill-files."**
+        help: |
+          Check together whether SKILL.md stays procedural and points to the reference and script
+          instead of repeating them. The description should say what the skill does and when to
+          use it. If the file check fails, read the failed check labels with the learner.
+        validation:
+          files:
+            - path: "**/expense-report/SKILL.md"
+              label: SKILL.md
+              min_length: 400
+              max_length: 5000
+              contains: ["## Steps", "scripts/", "references/"]
+              frontmatter:
+                required: [name, description]
+                max_length: { name: 64, description: 1024 }
+            - path: "**/expense-report/scripts/*"
+              label: The summary script
+              min_length: 200
+            - path: "**/expense-report/references/policy.md"
+              label: references/policy.md
+              min_length: 100
+              contains: ["35"]
+
+      - id: summary-output
+        type: configuration_validation
+        title: Run the skill and submit its output
+        estimated_minutes: 8
+        body: |
+          In a fresh chat, ask your agent to summarize the expenses in `expenses.csv`, so the skill
+          is triggered by its description, and to save the result as `expense-summary.json`.
+
+          Then ask: **"Submit expense-summary.json to the learning platform for step
+          summary-output."** The platform checks every total to the cent and the over-limit
+          list.
+        help: |
+          If totals are off by a few cents, the script probably doesn't round, or the model computed
+          them instead of running the script. If E-12 is flagged, revisit "above 35.00". Let the
+          learner run the script directly and compare.
+        config:
+          file: expense-summary.json
+          format: json
+        validation:
+          rules:
+            - { pointer: /total, equals: 552.39, label: "The total is exactly right" }
+            - { pointer: /by_category/travel, equals: 265.05, label: "Travel total is right" }
+            - { pointer: /by_category/meals, equals: 166.95, label: "Meals total is right" }
+            - { pointer: /by_category/software, equals: 61.99, label: "Software total is right" }
+            - { pointer: /by_category/office, equals: 58.4, label: "Office total is right" }
+            - { pointer: "/over_limit/*", equals: E-02, label: "E-02 is flagged as over the limit" }
+            - { pointer: "/over_limit/*", equals: E-07, label: "E-07 is flagged as over the limit" }
+            - { pointer: /over_limit/2, absent: true, label: "Nothing else is flagged" }
+
+      - id: trigger-evals
+        type: configuration_validation
+        title: Submit your trigger evals
+        estimated_minutes: 8
+        body: |
+          Write `evals/evals.json` in the skill folder with at least **four** cases: prompts that
+          should trigger the skill and near-misses that should not. Each case has `prompt`,
+          `should_trigger` and `expected` (what a good result looks like, or why it shouldn't
+          trigger):
+
+          ```json
+          { "cases": [ { "prompt": "Summarize these receipts by category", "should_trigger": true, "expected": "Totals per category and over-limit items" } ] }
+          ```
+
+          Try the prompts in fresh chats and adjust the description until they behave. Then ask
+          your agent to submit `evals/evals.json` for step trigger-evals.
+        help: |
+          Good near-misses are close to the skill's domain but shouldn't load it, e.g. "explain
+          our travel policy" or "make a CSV of my meetings". Let the learner come up with their
+          own examples.
+        config:
+          file: "**/expense-report/evals/evals.json"
+          format: json
+        validation:
+          rules:
+            - { pointer: /cases/3/prompt, label: "At least four cases" }
+            - { pointer: "/cases/*/should_trigger", equals: true, label: "Has a case that should trigger" }
+            - { pointer: "/cases/*/should_trigger", equals: false, label: "Has a near-miss that should not trigger" }
+            - { pointer: "/cases/*/expected", label: "Cases describe the expected result" }
+
+  - id: wrap-up
+    title: Wrap up
+    steps:
+      - id: reflection
+        type: free_text
+        title: What would you turn into a skill?
+        optional: true
+        estimated_minutes: 3
+        config:
+          prompt: Name a task from your own work that would make a good skill with a script. What would the script do, and what would the model still decide?
+        validation:
+          min_words: 25
+          required_concepts:
+            - label: the script's deterministic part
+              any_of: [script, calculate, parse, convert, validate, compute]
+      - id: finish
+        type: automatic_completion
+        title: Skills that scale
+        depends_on: [summary-output, trigger-evals]
+        body: |
+          Your skill combines judgment from the model with exact work from code, and you can
+          show when it triggers.

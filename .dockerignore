@@ -1,0 +1,7 @@
+target
+**/node_modules
+apps/web/build
+apps/web/.svelte-kit
+.env
+.env.*
+.git

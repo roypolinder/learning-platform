@@ -1,0 +1,408 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: tool-calling-fundamentals
+version: 1.0.0
+title: Tool calling from first principles
+summary: Give a model real tools with JSON Schema, run the tool loop yourself, and let the platform test both.
+description: |
+  Tool calling (also called function calling) is how a model goes from *talking* to *doing*:
+  it asks your code to run a function, you run it, and you hand the result back. Every modern
+  model API, MCP and every coding agent are built on this loop.
+
+  You will define two tools for a small web shop, build the executor that validates arguments
+  and returns errors a model can recover from, and then wire a model of your choice to it.
+  The platform calls your service with hidden orders and questions to prove it works.
+category: AI foundations
+difficulty: beginner
+order: 20
+estimated_minutes: 60
+tags: [tool-calling, function-calling, json-schema, structured-outputs, agents]
+objectives:
+  - Explain the tool-calling loop and who executes what
+  - Describe tools with JSON Schema so a model uses them correctly
+  - Return structured, recoverable tool errors instead of crashing
+  - Connect any model to your tools and keep it from calling tools it doesn't need
+prerequisites:
+  - title: Connect your AI agent over MCP
+    course: mcp-first-connection
+  - title: Basic experience building a small HTTP service in any language
+extensions: [quiz, service]
+help: |
+  The learner builds a small HTTP service in a language of their choice. Help them reason about
+  the tool-calling loop (model proposes a call, their code executes it, the result goes back
+  to the model) and about JSON Schema. Encourage them to test with curl or a small script
+  before running the platform check. Don't write their handlers or schemas for them.
+
+sections:
+  - id: concepts
+    title: How tool calling works
+    steps:
+      - id: the-loop
+        type: explanation
+        title: The tool-calling loop
+        estimated_minutes: 6
+        body: |
+          A model can't run code. What it *can* do is produce a structured request:
+          "call `get_order_status` with `{"order_id": "A-1042"}`". The loop looks like this:
+
+          1. You send the conversation **plus a list of tool definitions** to the model.
+          2. The model answers either with text, or with one or more **tool calls**.
+          3. **Your code** validates the arguments and runs the function.
+          4. You append the **tool result** to the conversation and call the model again.
+          5. Repeat until the model answers with text (or you hit a step limit).
+
+          Three things follow from this:
+
+          - **You stay in control.** The model only proposes. Your code decides whether a call
+            is allowed, validates every argument and can ask a human first.
+          - **Definitions are prompts.** The tool name, description and parameter descriptions
+            are all the model knows. Vague descriptions produce wrong calls.
+          - **Errors are information.** A result like `"order A-9999 does not exist"` lets the
+            model correct itself or tell the user. An HTTP 500 just breaks the loop.
+
+          The format is nearly identical across providers and is the same idea MCP standardizes:
+          a name, a description and a JSON Schema for the input. Learn it once and it transfers.
+
+      - id: schema-design
+        type: interactive_content
+        title: Designing good tool definitions
+        estimated_minutes: 6
+        config:
+          panels:
+            - title: Name and description
+              body: |
+                Use clear verb-noun names (`get_order_status`, not `orders2`). The description
+                says **what** the tool does, **when** to use it and what it returns:
+                *"Look up the shipping status of a web shop order by its order id (format
+                A-1234). Use when the customer asks where an order is."*
+            - title: Parameters
+              body: |
+                The input is a JSON Schema object. Describe every property, mark required
+                ones as `required`, and constrain values: `enum` for fixed choices, `pattern`
+                for formats, `minimum` for numbers. Constraints prevent whole classes of bad
+                calls.
+            - title: Results
+              body: |
+                Return small, structured results with only what the model needs. Don't dump a
+                whole database row with internal fields. For failures, return an error the
+                model can act on: what went wrong and what would work instead.
+            - title: Safety
+              body: |
+                Treat arguments as untrusted input, even though they come from "your" model.
+                A prompt injection in a document can make a model call tools with hostile
+                arguments. Validate, use least privilege, and require confirmation for
+                anything destructive or expensive.
+
+      - id: check-concepts
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 4
+        config:
+          pass_score: 0.75
+          questions:
+            - id: executor
+              prompt: Who actually runs the function when a model makes a tool call?
+              explanation: The model only produces the call. Your application executes it and returns the result.
+              options:
+                - { id: model, text: "The model provider, on its servers" }
+                - { id: app, text: "Your application code", correct: true }
+                - { id: schema, text: "The JSON Schema validator" }
+            - id: unknown-order
+              prompt: A model calls get_order_status with an id that doesn't exist. What should your tool return?
+              explanation: A structured error explains the problem so the model can recover or tell the user.
+              options:
+                - { id: crash, text: "Throw an exception so the request fails with HTTP 500" }
+                - { id: empty, text: "An empty object" }
+                - { id: error, text: "A tool result marked as an error, with a clear message", correct: true }
+            - id: descriptions
+              prompt: Why do parameter descriptions and enums matter so much?
+              explanation: The definition is the model's only documentation. Constraints and descriptions steer it to valid calls.
+              options:
+                - { id: docs, text: "They are all the model knows about how to call the tool", correct: true }
+                - { id: speed, text: "They make the model respond faster" }
+                - { id: none, text: "They don't; models ignore them" }
+            - id: injection
+              prompt: Which practice protects you when a prompt injection tries to trigger a tool?
+              multiple: true
+              explanation: Validate arguments, keep tools narrowly scoped and confirm destructive actions with a human.
+              options:
+                - { id: validate, text: "Validate every argument server-side", correct: true }
+                - { id: confirm, text: "Ask a human before destructive actions", correct: true }
+                - { id: trust, text: "Trust arguments because your own model produced them" }
+                - { id: scope, text: "Give tools only the permissions they need", correct: true }
+
+  - id: build-tools
+    title: Build the tools
+    steps:
+      - id: shop-data
+        type: code_example
+        title: The shop data and the contract
+        estimated_minutes: 5
+        body: |
+          You build a small HTTP service for the *Pebble & Pine* web shop, in any language and
+          framework. Hardcode the data below; a database is not the point of this course.
+
+          **Your service exposes:**
+
+          - `GET /tools` returns `{"tools": [...]}`. Each tool has `name`, `description` and
+            `input_schema` (a JSON Schema object with `properties` and `required`).
+          - `POST /tools/call` with `{"name": "...", "arguments": {...}}` returns HTTP 200
+            with either `{"is_error": false, "content": {...}}` or
+            `{"is_error": true, "error": "a helpful message"}`. Invalid input is a tool
+            error, not an HTTP error, so a model can read it.
+
+          **Tools:**
+
+          - `get_order_status(order_id)`: `order_id` matches `^A-[0-9]{4}$`. Returns
+            `status`, `carrier`, `tracking_number`, `eta` (when known) and `total_eur`.
+          - `convert_currency(amount, from, to)`: currencies are `EUR`, `USD`, `GBP` and
+            `JPY`. Returns `amount` (rounded to 2 decimals) and `currency`.
+        config:
+          snippets:
+            - filename: data.json
+              language: json
+              caption: Exchange rates are fixed per 1 EUR so results are predictable.
+              code: |
+                {
+                  "orders": [
+                    { "order_id": "A-1001", "status": "processing", "carrier": null, "tracking_number": null, "eta": null, "total_eur": 42.00 },
+                    { "order_id": "A-1042", "status": "shipped", "carrier": "ParcelNorth", "tracking_number": "PN-778211", "eta": "2026-11-20", "total_eur": 129.90 },
+                    { "order_id": "A-1077", "status": "delivered", "carrier": "ParcelNorth", "tracking_number": "PN-701552", "eta": null, "total_eur": 18.50 },
+                    { "order_id": "A-1103", "status": "cancelled", "carrier": null, "tracking_number": null, "eta": null, "total_eur": 64.00 }
+                  ],
+                  "rates_per_eur": { "EUR": 1.0, "USD": 1.08, "GBP": 0.86, "JPY": 162.5 }
+                }
+            - filename: tool call example
+              language: http
+              code: |
+                POST /tools/call
+                {"name": "convert_currency", "arguments": {"amount": 10, "from": "EUR", "to": "GBP"}}
+
+                200 OK
+                {"is_error": false, "content": {"amount": 8.6, "currency": "GBP"}}
+
+      - id: tool-server
+        type: service_check
+        title: Run the tool checks
+        estimated_minutes: 20
+        body: |
+          Start your service and enter its base URL. The platform reads your tool definitions
+          and makes calls you haven't seen: valid ones, unknown orders, malformed and missing
+          arguments, unsupported currencies and a tool that doesn't exist.
+
+          Test a few calls yourself with curl or a small script first.
+        help: |
+          Likely sticking points: `input_schema` must be an object schema with `properties` and
+          a `required` list; invalid input must return HTTP 200 with `is_error: true`
+          (not a 4xx/5xx); currency conversion between two non-EUR currencies goes through EUR.
+          Ask the learner which case failed and what their service returned for it, and let them
+          reproduce that call with curl.
+        validation:
+          timeout_ms: 5000
+          cases:
+            - id: list
+              label: Lists both tools with descriptions and object schemas
+              request: { path: /tools }
+              expect:
+                json:
+                  - { pointer: /tools, field: /name, includes_all: [get_order_status, convert_currency] }
+                  - { pointer: "/tools/*/description", min_length: 40 }
+                  - { pointer: "/tools/*/input_schema/type", equals: object }
+                  - { pointer: "/tools/*/input_schema/required", type: array, min_items: 1 }
+            - id: shipped
+              label: Looks up a shipped order
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: get_order_status, arguments: { order_id: A-1042 } }
+              expect:
+                json:
+                  - { pointer: /is_error, equals: false }
+                  - { pointer: /content/status, equals: shipped }
+                  - { pointer: /content/tracking_number, equals: PN-778211 }
+            - id: unknown-order
+              label: Reports an unknown order as a recoverable tool error
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: get_order_status, arguments: { order_id: A-9999 } }
+              expect:
+                status: 200
+                json:
+                  - { pointer: /is_error, equals: true }
+                  - { pointer: /error, min_length: 10 }
+            - id: bad-format
+              label: Rejects an order id in the wrong format
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: get_order_status, arguments: { order_id: "1042" } }
+              expect:
+                status: 200
+                json: [{ pointer: /is_error, equals: true }]
+            - id: missing-argument
+              label: Rejects a call with missing arguments
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: get_order_status, arguments: {} }
+              expect:
+                status: 200
+                json: [{ pointer: /is_error, equals: true }]
+            - id: convert
+              label: Converts a currency through the fixed rates
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: convert_currency, arguments: { amount: 129.90, from: EUR, to: USD } }
+              expect:
+                json:
+                  - { pointer: /is_error, equals: false }
+                  - { pointer: /content/amount, approx: 140.29, tolerance: 0.01 }
+                  - { pointer: /content/currency, equals: USD }
+            - id: cross-rate
+              label: Converts between two non-euro currencies
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: convert_currency, arguments: { amount: 50, from: GBP, to: JPY } }
+              expect:
+                json:
+                  - { pointer: /content/amount, approx: 9447.67, tolerance: 0.05 }
+            - id: bad-currency
+              label: Rejects an unsupported currency
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: convert_currency, arguments: { amount: 10, from: EUR, to: BTC } }
+              expect:
+                status: 200
+                json: [{ pointer: /is_error, equals: true }]
+            - id: unknown-tool
+              label: Rejects a tool that doesn't exist
+              request:
+                method: POST
+                path: /tools/call
+                json: { name: delete_order, arguments: { order_id: A-1042 } }
+              expect:
+                status: 200
+                json: [{ pointer: /is_error, equals: true }]
+
+  - id: connect-model
+    title: Connect a model
+    steps:
+      - id: chat-contract
+        type: explanation
+        title: Close the loop with a model
+        estimated_minutes: 5
+        body: |
+          Now add `POST /chat` that takes `{"message": "..."}` and runs the loop with a
+          model of your choice: a hosted API or a local model runner, as long as it supports
+          tool calling.
+
+          1. Send the user message and your two tool definitions to the model.
+          2. While the model returns tool calls, execute them **through your own executor**
+             (the same validation as `/tools/call`) and send the results back.
+          3. Stop when the model answers with text, or after **at most 6 rounds**. A loop without
+             a limit can run up a large bill when a model gets stuck.
+
+          Respond with:
+
+          ```json
+          {
+            "answer": "Your order A-1042 has shipped with ParcelNorth…",
+            "tool_calls": [ { "name": "get_order_status", "arguments": { "order_id": "A-1042" } } ]
+          }
+          ```
+
+          `tool_calls` lists every call the model made, in order. The platform uses it to check
+          that the model used the tools, and didn't use them when it didn't need to.
+
+          Keep your API key out of the code: read it from an environment variable.
+
+      - id: chat
+        type: service_check
+        title: Run the conversation checks
+        estimated_minutes: 20
+        body: |
+          The platform sends four hidden questions to `/chat`. The first must pass and at least
+          two of the other three.
+          Models vary, so improve your system prompt and tool descriptions rather than
+          special-casing questions.
+        help: |
+          If the model answers without calling tools, look at the tool descriptions and the system
+          prompt together. If it calls tools for a general-knowledge question, the system prompt
+          should say tools are only for shop orders and prices. If arithmetic is wrong, the model
+          should use convert_currency instead of doing math itself. Let the learner inspect the raw
+          model responses and the tool_calls list before changing code.
+        validation:
+          timeout_ms: 45000
+          parallel: true
+          min_pass_ratio: 0.66
+          cases:
+            - id: where
+              label: Answers where an order is by calling the order tool
+              request:
+                method: POST
+                path: /chat
+                json: { message: "Hi! Where is my order A-1042 right now?" }
+              expect:
+                json:
+                  - { pointer: /answer, contains_any: [shipped, ParcelNorth, PN-778211] }
+                  - { pointer: /tool_calls, field: /name, includes: get_order_status }
+            - id: chain
+              label: Chains two tools to price an order in dollars
+              graded: true
+              request:
+                method: POST
+                path: /chat
+                json: { message: "How much did my order A-1042 cost in US dollars?" }
+              expect:
+                json:
+                  - { pointer: /tool_calls, field: /name, includes_all: [get_order_status, convert_currency] }
+                  - { pointer: /answer, contains_any: ["140.29", "140,29"] }
+            - id: no-tools
+              label: Doesn't call tools for an unrelated question
+              graded: true
+              request:
+                method: POST
+                path: /chat
+                json: { message: "Can you give me a one-line definition of a haiku?" }
+              expect:
+                json:
+                  - { pointer: /tool_calls, max_items: 0 }
+                  - { pointer: /answer, min_length: 10 }
+            - id: missing
+              label: Tells the customer when an order doesn't exist
+              graded: true
+              request:
+                method: POST
+                path: /chat
+                json: { message: "Has order A-9999 shipped yet?" }
+              expect:
+                json:
+                  - { pointer: /tool_calls, field: /name, includes: get_order_status }
+                  - pointer: /answer
+                    contains_any: ["not find", "couldn't find", "could not find", "no order", "doesn't exist", "does not exist", "not found", "unable to find", "no record", "isn't", "invalid"]
+
+  - id: wrap-up
+    title: Wrap up
+    steps:
+      - id: reflection
+        type: free_text
+        title: Where would you draw the line?
+        optional: true
+        estimated_minutes: 3
+        config:
+          prompt: Name one tool you would let a model call freely and one that should always need a human's confirmation. Explain why.
+        validation:
+          min_words: 25
+          required_concepts:
+            - label: risk, cost or destructiveness
+              any_of: [destructive, delete, money, payment, irreversible, risk, cost, refund, send]
+      - id: finish
+        type: automatic_completion
+        title: Your model can act
+        depends_on: [chat]
+        body: |
+          You built the loop every agent runs on. Next up: semantic matching, or the MCP server
+          course, where the same tools become usable by any agent.

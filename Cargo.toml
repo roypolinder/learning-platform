@@ -1,0 +1,32 @@
+[workspace]
+resolver = "3"
+members = ["apps/api", "crates/core", "crates/course-engine", "crates/extensions"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "UNLICENSED"
+publish = false
+
+[workspace.dependencies]
+lp-core = { path = "crates/core" }
+lp-course-engine = { path = "crates/course-engine" }
+lp-extensions = { path = "crates/extensions" }
+
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time"] }
+tracing = "0.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
