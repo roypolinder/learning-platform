@@ -15,5 +15,6 @@
 		<p class="mt-1 text-[14px] text-fg-muted">{subtitle}</p>
 		<div class="mt-6">{@render children()}</div>
 		<div class="mt-6 border-t border-line pt-4 text-[13px] text-fg-muted">{@render footer()}</div>
+		<p class="mt-4 text-[12px] text-fg-subtle"><a href="/privacy" class="hover:text-fg hover:underline">Privacy</a></p>
 	</div>
 </div>

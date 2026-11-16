@@ -409,3 +409,49 @@ async fn outdated_sessions_move_to_the_current_version() {
     assert_eq!(resumed["session"]["id"], new_id);
     app.cleanup().await;
 }
+
+#[tokio::test]
+async fn traffic_report_is_for_super_admins_only() {
+    let path = std::env::temp_dir().join(format!("lp-traffic-{}.html", uuid::Uuid::now_v7()));
+    let app = TestApp::spawn_with_traffic_report(Some(path.clone())).await;
+    let ada = app.user("ada").await;
+    let root = app.user("root").await;
+    app.promote("root").await;
+
+    assert_eq!(
+        ada.get("/api/v1/admin/traffic-report").await.status(),
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        reqwest::get(app.url("/api/v1/admin/traffic-report"))
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    // The report only exists once the generator has run.
+    assert_eq!(
+        root.get("/api/v1/admin/traffic-report").await.status(),
+        StatusCode::NOT_FOUND
+    );
+
+    std::fs::write(&path, "<html>visits</html>").unwrap();
+    let report = root.json("/api/v1/admin/traffic-report").await;
+    assert_eq!(report["html"], "<html>visits</html>");
+    assert!(report["generated_at"].is_string());
+    assert_eq!(
+        ada.get("/api/v1/admin/traffic-report").await.status(),
+        StatusCode::FORBIDDEN
+    );
+    std::fs::remove_file(&path).unwrap();
+    app.cleanup().await;
+
+    let unconfigured = TestApp::spawn().await;
+    let root = unconfigured.user("root").await;
+    unconfigured.promote("root").await;
+    assert_eq!(
+        root.get("/api/v1/admin/traffic-report").await.status(),
+        StatusCode::NOT_FOUND
+    );
+    unconfigured.cleanup().await;
+}

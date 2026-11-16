@@ -6,4 +6,5 @@ pub mod integrations;
 pub mod oauth;
 pub mod progress;
 pub mod sessions;
+pub mod traffic;
 pub mod users;

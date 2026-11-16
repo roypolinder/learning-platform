@@ -23,6 +23,10 @@ pub struct TestApp {
 
 impl TestApp {
     pub async fn spawn() -> Self {
+        Self::spawn_with_traffic_report(None).await
+    }
+
+    pub async fn spawn_with_traffic_report(traffic_report_path: Option<PathBuf>) -> Self {
         let _ = dotenvy::from_path(repo_root().join(".env"));
         let admin_url = std::env::var("TEST_DATABASE_URL")
             .or_else(|_| std::env::var("DATABASE_URL"))
@@ -57,6 +61,7 @@ impl TestApp {
             mcp_allowed_hosts: vec!["localhost".into(), "127.0.0.1".into()],
             database_max_connections: 5,
             super_admin_emails: Vec::new(),
+            traffic_report_path,
         };
         let state = app::bootstrap_with_pool(config, pool)
             .await

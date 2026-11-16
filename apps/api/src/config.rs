@@ -21,6 +21,8 @@ pub struct AppConfig {
     pub trust_proxy_headers: bool,
     /// Lowercased emails of existing accounts promoted to super admin at startup.
     pub super_admin_emails: Vec<String>,
+    /// HTML traffic report generated from the reverse proxy's access log; shown to super admins.
+    pub traffic_report_path: Option<PathBuf>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -94,6 +96,7 @@ impl AppConfig {
                         .collect()
                 })
                 .unwrap_or_default(),
+            traffic_report_path: optional("TRAFFIC_REPORT_PATH").map(PathBuf::from),
         })
     }
 }
@@ -114,6 +117,7 @@ impl AppConfig {
             mcp_allowed_hosts: Vec::new(),
             database_max_connections: 1,
             super_admin_emails: Vec::new(),
+            traffic_report_path: None,
         }
     }
 }

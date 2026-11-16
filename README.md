@@ -135,6 +135,12 @@ updates. Re-runs keep existing config and secrets. `sudo learning-platform <comm
 admin commands (e.g. `grant-super-admin`) with the production config. See
 `./setup.sh --help` for non-interactive use.
 
+Traffic statistics: Caddy's access log is rotated daily and deleted after 30 days. Every 15
+minutes GoAccess turns it into an HTML report (IPs shortened, query strings removed, crawlers
+left out) that only super admins can open at `/admin/traffic`; the API serves it from
+`TRAFFIC_REPORT_PATH`. The `/privacy` page describes this and must stay in sync with the log
+retention (`ACCESS_LOG_RETENTION_DAYS` in `setup.sh`).
+
 The logo in the app is `apps/web/static/favicon.svg`; replace that file to rebrand.
 
 ## Project layout

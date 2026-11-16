@@ -28,6 +28,10 @@ SETUP_CONF=$CONF_DIR/setup.conf
 BACKUP_DIR=/var/backups/$APP
 LOG_FILE=/var/log/$APP-setup.log
 CADDY_SITE=/etc/caddy/$APP.caddy
+TRAFFIC_DIR=/var/lib/$APP-traffic
+TRAFFIC_REPORT=$TRAFFIC_DIR/report.html
+# Also stated on the /privacy page of the web app.
+ACCESS_LOG_RETENTION_DAYS=30
 export RUSTUP_HOME=/usr/local/rustup
 export CARGO_HOME=/usr/local/cargo
 export PATH="$CARGO_HOME/bin:$PATH"
@@ -75,7 +79,7 @@ Usage: sudo ./setup.sh [options]
 Options:
   -y, --yes          Non-interactive: use saved answers, environment variables or defaults.
                      Variables: DOMAIN, ADMIN_EMAIL, ENABLE_FIREWALL, ENABLE_BACKUPS,
-                     BACKUP_RETENTION_DAYS, ENABLE_AUTO_UPDATES, APP_PORT.
+                     BACKUP_RETENTION_DAYS, ENABLE_AUTO_UPDATES, ENABLE_TRAFFIC_REPORT, APP_PORT.
       --reconfigure  Ask the setup questions again (config and secrets are kept).
   -h, --help         Show this help.
 EOF
@@ -216,6 +220,7 @@ load_or_ask_settings() {
 	if [[ -f $SETUP_CONF ]] && ! $RECONFIGURE; then
 		# shellcheck disable=SC1090
 		. "$SETUP_CONF"
+		ENABLE_TRAFFIC_REPORT=${ENABLE_TRAFFIC_REPORT:-yes}
 		ok "Using saved answers from $SETUP_CONF (run with --reconfigure to change them)"
 		return
 	fi
@@ -267,6 +272,10 @@ EOF
 	if [[ -z $ENABLE_AUTO_UPDATES ]]; then
 		confirm "Install security updates automatically (unattended-upgrades)?" y && ENABLE_AUTO_UPDATES=yes || ENABLE_AUTO_UPDATES=no
 	fi
+	ENABLE_TRAFFIC_REPORT=${ENABLE_TRAFFIC_REPORT:-}
+	if [[ -z $ENABLE_TRAFFIC_REPORT ]]; then
+		confirm "Show traffic statistics to super admins (built from the web server log)?" y && ENABLE_TRAFFIC_REPORT=yes || ENABLE_TRAFFIC_REPORT=no
+	fi
 
 	install -d -m 750 "$CONF_DIR"
 	cat >"$SETUP_CONF" <<EOF
@@ -278,6 +287,7 @@ ENABLE_FIREWALL=$ENABLE_FIREWALL
 ENABLE_BACKUPS=$ENABLE_BACKUPS
 BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-14}
 ENABLE_AUTO_UPDATES=$ENABLE_AUTO_UPDATES
+ENABLE_TRAFFIC_REPORT=$ENABLE_TRAFFIC_REPORT
 EOF
 	chmod 600 "$SETUP_CONF"
 	ok "Saved answers to $SETUP_CONF"
@@ -434,7 +444,12 @@ SQL
 write_config() {
 	step "Writing the configuration"
 	local cookie_secure=false hosts="localhost,127.0.0.1,::1"
+	local traffic_setting="# The traffic report for super admins is disabled (setup.sh --reconfigure enables it)."
 	[[ -n $DOMAIN ]] && cookie_secure=true
+	if [[ $ENABLE_TRAFFIC_REPORT == yes ]]; then
+		traffic_setting="# HTML traffic report, rebuilt from the Caddy access log every 15 minutes.
+TRAFFIC_REPORT_PATH=$TRAFFIC_REPORT"
+	fi
 	hosts="$PUBLIC_HOST,$hosts"
 
 	if [[ ! -f $ENV_FILE ]]; then
@@ -461,6 +476,8 @@ TRUST_PROXY_HEADERS=true
 # Accounts with these emails become super admin (course studio) at startup.
 SUPER_ADMIN_EMAILS=$ADMIN_EMAIL
 
+$traffic_setting
+
 COOKIE_SECURE=$cookie_secure
 # Published course versions are immutable: bump "version" when you change a course file.
 MUTABLE_COURSE_VERSIONS=false
@@ -480,6 +497,7 @@ EOF
 		ensure_env_value SUPER_ADMIN_EMAILS "$ADMIN_EMAIL"
 		ensure_env_value COOKIE_SECURE "$cookie_secure"
 		ensure_env_value MUTABLE_COURSE_VERSIONS false
+		if [[ $ENABLE_TRAFFIC_REPORT == yes ]]; then ensure_env_value TRAFFIC_REPORT_PATH "$TRAFFIC_REPORT"; fi
 		ensure_env_value RUST_LOG "info,lp_api=info,sqlx=warn,tower_http=warn"
 		if $RECONFIGURE; then
 			set_env_value PUBLIC_BASE_URL "$PUBLIC_URL"
@@ -672,6 +690,22 @@ check_dns() {
 	fi
 }
 
+# Access logs hold visitor IP addresses, so they are deleted after a fixed number of days.
+configure_log_rotation() {
+	cat >/etc/logrotate.d/$APP <<EOF
+/var/log/caddy/$APP.log {
+	daily
+	rotate $ACCESS_LOG_RETENTION_DAYS
+	compress
+	delaycompress
+	missingok
+	notifempty
+	copytruncate
+	su caddy caddy
+}
+EOF
+}
+
 configure_caddy() {
 	step "Configuring Caddy"
 	check_dns
@@ -698,8 +732,7 @@ $hsts
 	}
 	log {
 		output file /var/log/caddy/$APP.log {
-			roll_size 10MiB
-			roll_keep 5
+			roll_disabled
 		}
 	}
 }
@@ -716,6 +749,7 @@ EOF
 		die "Caddy rejected the configuration; run: caddy validate --config $caddyfile"
 	# Validating as root creates the log file owned by root, which the caddy service can't open.
 	chown -R caddy:caddy /var/log/caddy
+	configure_log_rotation
 	systemctl enable caddy >/dev/null 2>&1
 	systemctl reload-or-restart caddy
 	ok "Caddy serves $PUBLIC_URL"
@@ -783,6 +817,70 @@ EOF
 	ok "Daily at 03:15 to $BACKUP_DIR, kept ${BACKUP_RETENTION_DAYS:-14} days (first backup made now)"
 }
 
+configure_traffic_report() {
+	[[ $ENABLE_TRAFFIC_REPORT == yes ]] || return 0
+	step "Configuring the traffic report"
+	apt_install goaccess
+	install -d -m 750 -g "$SERVICE_USER" "$TRAFFIC_DIR"
+	cat >/usr/local/sbin/$APP-traffic-report <<EOF
+#!/usr/bin/env bash
+# Builds the HTML report that super admins see at $PUBLIC_URL/admin/traffic.
+set -euo pipefail
+LOG_GLOB='/var/log/caddy/$APP.log*'
+REPORT=$TRAFFIC_REPORT
+GROUP=$SERVICE_USER
+EOF
+	# GoAccess 1.5 reads Caddy's address from remote_addr and newer versions from client_ip, so the
+	# format is spelled out. IPs are shortened and query strings dropped (they can hold OAuth codes).
+	cat >>/usr/local/sbin/$APP-traffic-report <<'EOF'
+shopt -s nullglob
+# shellcheck disable=SC2206
+logs=($LOG_GLOB)
+((${#logs[@]})) || exit 0
+tmp="$(dirname "$REPORT")/.report.tmp.html"
+zcat -f "${logs[@]}" | goaccess - \
+	--log-format='{ "ts": "%x.%^", "request": { "client_ip": "%h", "proto": "%H", "method": "%m", "host": "%v", "uri": "%U", "headers": { "User-Agent": ["%u"] } }, "duration": "%T", "size": "%b", "status": "%s" }' \
+	--date-format='%s' --time-format='%s' \
+	--anonymize-ip --no-query-string --ignore-crawlers \
+	--html-report-title='Learning Platform traffic' -o "$tmp"
+chgrp "$GROUP" "$tmp"
+chmod 640 "$tmp"
+mv "$tmp" "$REPORT"
+EOF
+	chmod 750 /usr/local/sbin/$APP-traffic-report
+	cat >/etc/systemd/system/$APP-traffic-report.service <<EOF
+[Unit]
+Description=Build the Learning Platform traffic report
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/$APP-traffic-report
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=$TRAFFIC_DIR
+EOF
+	cat >/etc/systemd/system/$APP-traffic-report.timer <<EOF
+[Unit]
+Description=Rebuild the Learning Platform traffic report every 15 minutes
+
+[Timer]
+OnBootSec=2min
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+	systemctl daemon-reload
+	systemctl enable --now $APP-traffic-report.timer >/dev/null 2>&1
+	systemctl start $APP-traffic-report.service ||
+		warn "The first report could not be built yet; see: journalctl -u $APP-traffic-report"
+	ok "Super admins see it at $PUBLIC_URL/admin/traffic (updated every 15 minutes)"
+}
+
 configure_auto_updates() {
 	[[ $ENABLE_AUTO_UPDATES == yes ]] || return 0
 	step "Enabling automatic security updates"
@@ -840,6 +938,7 @@ ${GREEN}${BOLD}The Learning Platform is running at $PUBLIC_URL${RESET}
   Status          systemctl status $APP caddy
   Admin commands  sudo $APP grant-super-admin <email> | check-courses | migrate
 EOF
+	[[ $ENABLE_TRAFFIC_REPORT == yes ]] && echo "  Traffic         $PUBLIC_URL/admin/traffic (super admins; access logs kept $ACCESS_LOG_RETENTION_DAYS days)"
 	[[ $ENABLE_BACKUPS == yes ]] && echo "  Backups         $BACKUP_DIR (restore: see /usr/local/sbin/$APP-backup)"
 	cat <<EOF
   Update          git pull && sudo ./setup.sh   (automatic rollback if the new release fails)
@@ -899,6 +998,7 @@ main() {
 	configure_backups
 	configure_auto_updates
 	verify_public
+	configure_traffic_report
 	promote_admin
 	summary
 }

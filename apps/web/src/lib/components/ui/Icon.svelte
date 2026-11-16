@@ -26,6 +26,7 @@
 		play: 'M5 3.5v9l7-4.5z',
 		edit: 'M10.5 2.5l3 3L6 13H3v-3z',
 		plus: 'M8 3v10M3 8h10',
+		chart: 'M2.5 13.5h11M4.5 13.5V8.5M8 13.5v-9M11.5 13.5V6.5',
 		'external': 'M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5'
 	} as const;
 

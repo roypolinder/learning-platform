@@ -250,3 +250,9 @@ export interface AuthoringGuide {
 	guide_markdown: string;
 	step_types: StepTypeInfo[];
 }
+
+export interface TrafficReport {
+	generated_at: string;
+	/** Self-contained HTML document; render only inside a sandboxed iframe. */
+	html: string;
+}

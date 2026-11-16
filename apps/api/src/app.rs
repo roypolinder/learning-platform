@@ -20,7 +20,7 @@ use tower_http::trace::TraceLayer;
 use crate::config::AppConfig;
 use crate::db;
 use crate::domains::{
-    auth, authoring, courses, extensions, integrations, oauth, progress, sessions, users,
+    auth, authoring, courses, extensions, integrations, oauth, progress, sessions, traffic, users,
 };
 use crate::error::ApiError;
 use crate::http::csrf;
@@ -89,6 +89,7 @@ pub fn router(state: AppState, shutdown: CancellationToken) -> Router {
         .merge(extensions::routes())
         .merge(integrations::routes())
         .merge(authoring::routes())
+        .merge(traffic::routes())
         .merge(oauth::routes())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

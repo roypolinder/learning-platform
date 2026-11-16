@@ -12,6 +12,7 @@
 		{ href: '/', label: 'Home', icon: 'home', requiresAuth: true },
 		{ href: '/courses', label: 'Courses', icon: 'book' },
 		{ href: '/admin/courses', label: 'Course studio', icon: 'edit', requiresAdmin: true },
+		{ href: '/admin/traffic', label: 'Traffic', icon: 'chart', requiresAdmin: true },
 		{ href: '/settings', label: 'Settings', icon: 'settings', requiresAuth: true }
 	];
 
@@ -71,10 +72,13 @@
 			<a href="/" class="flex items-center gap-2 text-[13px] font-semibold"><Logo size={18} />Learning Platform</a>
 			<nav class="flex gap-3 text-[13px] text-fg-muted">
 				<a href="/courses">Courses</a>
-				{#if auth.isSuperAdmin}<a href="/admin/courses">Studio</a>{/if}
+				{#if auth.isSuperAdmin}<a href="/admin/courses">Studio</a><a href="/admin/traffic">Traffic</a>{/if}
 				{#if auth.user}<a href="/settings">Settings</a>{:else}<a href="/login">Sign in</a>{/if}
 			</nav>
 		</header>
 		<main class="flex-1">{@render children()}</main>
+		<footer class="border-t border-line px-6 py-3 text-[12px] text-fg-subtle">
+			<a href="/privacy" class="hover:text-fg hover:underline">Privacy</a>
+		</footer>
 	</div>
 </div>
