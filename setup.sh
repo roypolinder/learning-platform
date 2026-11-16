@@ -714,6 +714,8 @@ EOF
 	fi
 	caddy validate --config "$caddyfile" --adapter caddyfile >/dev/null 2>&1 ||
 		die "Caddy rejected the configuration; run: caddy validate --config $caddyfile"
+	# Validating as root creates the log file owned by root, which the caddy service can't open.
+	chown -R caddy:caddy /var/log/caddy
 	systemctl enable caddy >/dev/null 2>&1
 	systemctl reload-or-restart caddy
 	ok "Caddy serves $PUBLIC_URL"
