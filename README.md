@@ -139,7 +139,10 @@ Traffic statistics: Caddy's access log is rotated daily and deleted after 30 day
 minutes GoAccess turns it into an HTML report (IPs shortened, query strings removed, crawlers
 left out) that only super admins can open at `/admin/traffic`; the API serves it from
 `TRAFFIC_REPORT_PATH`. The `/privacy` page describes this and must stay in sync with the log
-retention (`ACCESS_LOG_RETENTION_DAYS` in `setup.sh`).
+retention (`ACCESS_LOG_RETENTION_DAYS` in `setup.sh`) and the backup retention
+(`BACKUP_RETENTION_DAYS`). If you run your own instance, you are the data controller: edit the
+constants at the top of `apps/web/src/routes/privacy/+page.svelte` (contact email, hosting provider,
+retention days) before going live.
 
 The logo in the app is `apps/web/static/favicon.svg`; replace that file to rebrand.
 
