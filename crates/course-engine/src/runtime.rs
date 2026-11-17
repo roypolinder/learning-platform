@@ -6,11 +6,12 @@ use lp_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::builtin::{self, CONDITIONAL, PREREQUISITE};
+use crate::builtin::{self, CONDITIONAL, PREREQUISITE, PROJECT_SETUP};
 use crate::compiler;
 use crate::course::{Course, CourseStep};
 use crate::definition::CourseDefinition;
 use crate::error::{CourseValidationError, EngineError};
+use crate::personalize::{Audience, personalize};
 use crate::registry::{ExtensionRegistry, RegistryError, StepTypeEntry, StepTypeRegistry};
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -44,6 +45,8 @@ impl Progress {
 #[derive(Debug, Clone, Default)]
 pub struct EngineContext {
     pub completed_courses: HashSet<String>,
+    /// The learner has chosen the website they build throughout the track.
+    pub has_project: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +68,7 @@ pub enum TransitionReason {
     ConditionMet,
     ConditionNotMet,
     PrerequisiteMet,
+    ProjectChosen,
     AutoCompleted,
 }
 
@@ -108,6 +112,21 @@ impl CourseEngine {
 
     pub fn compile(&self, definition: CourseDefinition) -> Result<Course, CourseValidationError> {
         compiler::compile(definition, &self.step_types, &self.extensions)
+    }
+
+    /// The course as one learner sees it: in their language, with their project theme
+    /// filled in. Step ids and structure are identical to `course`, so progress applies.
+    pub fn render(
+        &self,
+        course: &Course,
+        audience: Audience<'_>,
+    ) -> Result<Course, CourseValidationError> {
+        let definition =
+            personalize(&course.definition, audience).map_err(|issues| CourseValidationError {
+                course_id: course.id.clone(),
+                issues,
+            })?;
+        self.compile(definition)
     }
 
     pub fn start(
@@ -307,7 +326,11 @@ impl CourseEngine {
                     StepStatus::Locked if dependencies_resolved(step, progress) => {
                         Some(unlock_target(step, progress))
                     }
+                    // Derived steps resolve whether or not the learner opened them first.
                     StepStatus::Available => resolve_available(step, context),
+                    StepStatus::InProgress if step.completion == CompletionStrategy::Derived => {
+                        resolve_available(step, context)
+                    }
                     _ => None,
                 };
                 if let Some((status, reason)) = next {
@@ -465,6 +488,9 @@ fn resolve_available(
                 .all(|course| context.completed_courses.contains(course));
             met.then_some((StepStatus::Completed, TransitionReason::PrerequisiteMet))
         }
+        CompletionStrategy::Derived if step.step_type == PROJECT_SETUP => context
+            .has_project
+            .then_some((StepStatus::Completed, TransitionReason::ProjectChosen)),
         _ => None,
     }
 }

@@ -6,26 +6,27 @@
 	import Skeleton from '#lib/components/ui/Skeleton.svelte';
 	import { CourseCatalog, type ProgressFilter } from '#lib/features/courses/catalog-state.svelte.ts';
 	import CourseRow from '#lib/features/courses/CourseRow.svelte';
+	import { i18n, t, type MessageKey } from '#lib/i18n/index.svelte.ts';
 	import { auth } from '#lib/state/auth.svelte.ts';
 	import type { Difficulty } from '#lib/types/api.ts';
 
 	const catalog = new CourseCatalog();
-	const progressFilters: { value: ProgressFilter; label: string }[] = [
-		{ value: 'all', label: 'All' },
-		{ value: 'not_started', label: 'Not started' },
-		{ value: 'in_progress', label: 'In progress' },
-		{ value: 'completed', label: 'Completed' }
+	const progressFilters: { value: ProgressFilter; label: MessageKey }[] = [
+		{ value: 'all', label: 'courses.filter_all' },
+		{ value: 'not_started', label: 'courses.filter_not_started' },
+		{ value: 'in_progress', label: 'common.in_progress' },
+		{ value: 'completed', label: 'common.completed' }
 	];
-	const difficulties: { value: Difficulty | null; label: string }[] = [
-		{ value: null, label: 'Any level' },
-		{ value: 'beginner', label: 'Beginner' },
-		{ value: 'intermediate', label: 'Intermediate' },
-		{ value: 'advanced', label: 'Advanced' }
+	const difficulties: { value: Difficulty | null; label: MessageKey }[] = [
+		{ value: null, label: 'courses.any_level' },
+		{ value: 'beginner', label: 'difficulty.beginner' },
+		{ value: 'intermediate', label: 'difficulty.intermediate' },
+		{ value: 'advanced', label: 'difficulty.advanced' }
 	];
 
 	$effect(() => {
-		// Track filter state and sign-in (for progress); debounce typing.
-		void [catalog.query, catalog.category, catalog.difficulty, auth.user?.id];
+		// Track filters, sign-in (for progress) and language (for titles); debounce typing.
+		void [catalog.query, catalog.category, catalog.difficulty, auth.user?.id, i18n.locale];
 		const timer = setTimeout(() => void catalog.load(), 150);
 		return () => clearTimeout(timer);
 	});
@@ -38,33 +39,33 @@
 	}
 </script>
 
-<svelte:head><title>Courses · Learning Platform</title></svelte:head>
+<svelte:head><title>{t('courses.title')} · {t('app.name')}</title></svelte:head>
 
 <div class="mx-auto max-w-4xl px-6 py-8">
-	<PageHeader title="Courses" description="Hands-on courses you complete with your own editor and AI agent." />
+	<PageHeader title={t('courses.title')} description={t('courses.description')} />
 
 	<div class="mt-5 flex flex-wrap items-center gap-3">
 		<label class="relative min-w-60 flex-1">
-			<span class="sr-only">Search courses</span>
+			<span class="sr-only">{t('courses.search')}</span>
 			<Icon name="search" size={14} class="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-fg-subtle" />
 			<input
 				bind:value={catalog.query}
 				type="search"
-				placeholder="Search by title, topic or tag"
+				placeholder={t('courses.search_placeholder')}
 				class="h-8 w-full rounded-md border border-line-strong bg-surface pr-3 pl-8 text-[13px] placeholder:text-fg-subtle focus:border-accent focus:outline-none"
 			/>
 		</label>
 		<select
 			bind:value={catalog.difficulty}
-			aria-label="Difficulty"
+			aria-label={t('courses.difficulty')}
 			class="h-8 rounded-md border border-line-strong bg-surface px-2 text-[13px] focus:border-accent focus:outline-none"
 		>
-			{#each difficulties as option (option.label)}<option value={option.value}>{option.label}</option>{/each}
+			{#each difficulties as option (option.label)}<option value={option.value}>{t(option.label)}</option>{/each}
 		</select>
 	</div>
 
 	{#if auth.user}
-		<div class="mt-4 flex gap-4 border-b border-line text-[13px]" role="tablist" aria-label="Your progress">
+		<div class="mt-4 flex gap-4 border-b border-line text-[13px]" role="tablist" aria-label={t('courses.your_progress')}>
 			{#each progressFilters as filter (filter.value)}
 				<button
 					type="button"
@@ -73,14 +74,14 @@
 					onclick={() => (catalog.progressFilter = filter.value)}
 					class="-mb-px flex items-center gap-1.5 border-b-2 border-transparent pb-2 text-fg-muted hover:text-fg aria-selected:border-fg aria-selected:font-medium aria-selected:text-fg"
 				>
-					{filter.label}
+					{t(filter.label)}
 					<span class="rounded bg-surface-muted px-1.5 font-mono text-[11px] text-fg-subtle">{catalog.count(filter.value)}</span>
 				</button>
 			{/each}
 		</div>
 	{/if}
 
-	<div class="mt-3 flex flex-wrap gap-1.5" role="group" aria-label="Category">
+	<div class="mt-3 flex flex-wrap gap-1.5" role="group" aria-label={t('courses.category')}>
 		{#each [null, ...catalog.categories] as category (category ?? 'all')}
 			<button
 				type="button"
@@ -88,7 +89,7 @@
 				onclick={() => (catalog.category = category)}
 				class="h-7 rounded-md border border-line px-2.5 text-[12px] text-fg-muted hover:text-fg aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-bg"
 			>
-				{category ?? 'All topics'}
+				{category ?? t('courses.all_topics')}
 			</button>
 		{/each}
 	</div>
@@ -99,14 +100,16 @@
 		{:else if catalog.loading && !catalog.courses.length}
 			<div class="flex flex-col gap-2"><Skeleton class="h-20" /><Skeleton class="h-20" /><Skeleton class="h-20" /></div>
 		{:else if !catalog.visible.length}
-			<EmptyState title="No courses match" description="Try a different search term or clear the filters.">
-				{#snippet actions()}<button type="button" class="text-[13px] font-medium text-accent" onclick={reset}>Clear filters</button>{/snippet}
+			<EmptyState title={t('courses.empty_title')} description={t('courses.empty_body')}>
+				{#snippet actions()}<button type="button" class="text-[13px] font-medium text-accent" onclick={reset}>{t('courses.clear')}</button>{/snippet}
 			</EmptyState>
 		{:else}
 			<div class="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface">
-				{#each catalog.visible as course (course.id)}<CourseRow {course} progress={catalog.progress[course.id]} />{/each}
+				{#each catalog.visible as course (course.id)}<CourseRow {course} progress={catalog.progress[course.id]} position={catalog.position(course.id)} />{/each}
 			</div>
-			<p class="mt-3 text-[12px] text-fg-subtle">{catalog.visible.length} course{catalog.visible.length === 1 ? '' : 's'}</p>
+			<p class="mt-3 text-[12px] text-fg-subtle">
+				{catalog.visible.length === 1 ? t('courses.count_one') : t('courses.count_other', { count: catalog.visible.length })}
+			</p>
 		{/if}
 	</div>
 </div>

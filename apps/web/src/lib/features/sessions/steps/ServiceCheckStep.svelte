@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import CodeBlock from '#lib/components/ui/CodeBlock.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
@@ -41,7 +42,7 @@
 		try {
 			new URL(url);
 		} catch {
-			runError = 'Enter a full URL, for example http://localhost:3000.';
+			runError = t('service.invalid_url');
 			return;
 		}
 		running = true;
@@ -53,7 +54,7 @@
 			const payload = task.kind === 'mcp' ? await runMcpTask(task, url, report) : await runHttpTask(task, url, report);
 			await session.submit(step.id, payload);
 		} catch (caught) {
-			runError = caught instanceof Error ? caught.message : 'The checks could not run.';
+			runError = caught instanceof Error ? caught.message : t('service.run_error');
 		} finally {
 			running = false;
 		}
@@ -62,48 +63,44 @@
 
 <div class="flex flex-col gap-4">
 	{#if !task}
-		<Notice tone="danger">This step has no checks to run.</Notice>
+		<Notice tone="danger">{t('service.no_checks')}</Notice>
 	{:else if !completed}
 		<form class="flex items-end gap-2" onsubmit={run}>
 			<div class="flex-1">
 				<TextField
-					label={isMcp ? 'MCP server URL' : 'Service base URL'}
+					label={t(isMcp ? 'service.url_mcp' : 'service.url_http')}
 					type="url"
 					bind:value={url}
 					hint={isMcp
-						? `Your browser connects to ${task.kind === 'mcp' ? task.path : '/mcp'} on this host, so localhost works.`
-						: 'Your browser sends the test requests, so localhost works. Nothing needs to be exposed.'}
+						? t('service.hint_mcp', { path: task.kind === 'mcp' ? task.path : '/mcp' })
+						: t('service.hint_http')}
 				/>
 			</div>
-			<Button type="submit" variant="primary" loading={running || session.pending} class="mb-[22px] h-9">Run checks</Button>
+			<Button type="submit" variant="primary" loading={running || session.pending} class="mb-[22px] h-9">{t('service.run')}</Button>
 		</form>
 
 		{#if running}
 			<p class="flex items-center gap-2 text-[12px] text-fg-muted">
 				<Icon name="clock" size={13} />
-				Sent {done} of {total} requests. Services that call a model can take a while.
+				{t('service.progress', { done, total })}
 			</p>
 		{/if}
 		{#if runError}<Notice tone="danger">{runError}</Notice>{/if}
 
 		<details class="rounded-lg border border-line bg-surface px-4 py-3 text-[13px]">
-			<summary class="cursor-pointer font-medium">Let your browser reach the service (CORS)</summary>
+			<summary class="cursor-pointer font-medium">{t('service.cors_title')}</summary>
 			<div class="mt-2 flex flex-col gap-2 text-fg-muted">
-				<p>
-					The requests come from this page, so your service must allow cross-origin requests from
-					<code class="font-mono text-[12px] text-fg">{origin}</code>, including the <code class="font-mono text-[12px]">OPTIONS</code>
-					preflight. Most frameworks have a CORS middleware for this. The responses need these headers:
-				</p>
-				<CodeBlock code={corsHeaders} filename="Response headers" />
+				<p>{t('service.cors_body', { origin })}</p>
+				<CodeBlock code={corsHeaders} filename={t('service.cors_headers')} />
 				{#if isMcp}
-					<p>If your MCP SDK validates the <code class="font-mono text-[12px]">Origin</code> header, add this origin to its allowed origins.</p>
+					<p>{t('service.cors_mcp')}</p>
 				{/if}
 			</div>
 		</details>
 
 		{#if task.kind === 'http' && task.cases.length > 1}
 			<details class="text-[13px] text-fg-muted">
-				<summary class="cursor-pointer">What will be checked ({task.cases.length} checks)</summary>
+				<summary class="cursor-pointer">{t('service.cases', { count: task.cases.length })}</summary>
 				<ul class="mt-2 list-disc pl-5">
 					{#each task.cases as item (item.id)}<li>{item.label}</li>{/each}
 				</ul>
@@ -114,7 +111,7 @@
 	{#if progress?.outcome}<OutcomePanel outcome={progress.outcome} />{/if}
 	{#if completed}
 		<div class="flex justify-end">
-			<Button onclick={() => session.advance(step.id)}>Next step <Icon name="arrow-right" size={14} /></Button>
+			<Button onclick={() => session.advance(step.id)}>{t('common.next_step')} <Icon name="arrow-right" size={14} /></Button>
 		</div>
 	{/if}
 </div>

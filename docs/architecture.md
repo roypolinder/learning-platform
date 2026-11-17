@@ -30,6 +30,14 @@ dependencies (previous step), resolves each step's extension from the step-type 
 runs built-in and extension config validation, detects dependency cycles, and checks
 declared extensions. All problems are reported at once with paths.
 
+**Rendering per learner.** A compiled course is a template. `CourseEngine::render` applies the
+learner's language overlay and fills in `{{theme.…}}` placeholders from their project theme,
+then compiles the result; step ids and structure never change, so progress applies to every
+rendering. The API caches renderings per (version, locale, theme) and uses them for views,
+MCP and validation, so hidden checks run against the learner's own theme probes. A learner's
+profile (`users.locale`, `learner_projects`) also feeds `EngineContext.has_project`, which
+completes `project_setup` steps.
+
 **Step types** come from a registry built from engine built-ins plus every extension's
 manifest. Each type has a category (`content`, `assessment`, `practical`, `workflow`) and a
 completion strategy:

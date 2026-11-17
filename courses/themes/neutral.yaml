@@ -1,0 +1,37 @@
+# Wording used before a learner has chosen a project, and the canonical shape of `data` and
+# `probes`: every theme must define the same vars and the same data/probe structure.
+id: neutral
+selectable: false
+name: { en: Your project, nl: Je project }
+vars:
+  en:
+    site_kind: website
+    business: business
+    item: item
+    items: items
+    search_example: something for a rainy day
+  nl:
+    site_kind: website
+    business: bedrijf
+    item: item
+    items: items
+    search_example: iets voor een regenachtige dag
+data:
+  site: { name: Your site, city: Your city }
+  items:
+    - { id: example-item, name: Example item, category: example, price: 0, description: An example item., tags: [example] }
+  pages:
+    - { id: example-page, title: Example page, body: Example text. }
+probes:
+  catalog: { count: 0, item_id: example-item, item_name: Example item, category: example, category_ids: [example-item], item_price: 0, price_mentions: ["0"] }
+  search:
+    dutch: { query: voorbeeld, expected: example-item }
+    paraphrase: { query: example, expected: example-item }
+    need: { query: example, expected: example-item }
+    situation: { query: example, expected: example-item }
+  vector: { query: example, category: example, expected: example-item, excluded: example-item }
+  rag:
+    fact: { question: "Example?", answer_any: [example], source: example-page }
+    policy: { question: "Example?", answer_any: [example], source: example-page }
+    detail: { question: "Example?", answer_any: [example], source: example-page }
+    unanswerable: { question: "Example?" }

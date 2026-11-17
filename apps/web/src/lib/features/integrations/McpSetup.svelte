@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import { onMount } from 'svelte';
 	import Button from '#lib/components/ui/Button.svelte';
 	import CodeBlock from '#lib/components/ui/CodeBlock.svelte';
@@ -26,21 +27,21 @@
 		<div class="flex items-center gap-2.5">
 			<Icon name="plug" class="text-fg-muted" />
 			<div>
-				<p class="text-[13px] font-medium">Agent connection</p>
+				<p class="text-[13px] font-medium">{t('mcp.title')}</p>
 				<p class="font-mono text-[11px] text-fg-subtle">{connections.endpoint || '…'}</p>
 			</div>
 		</div>
 		{#if connections.connected}
 			<span class="flex items-center gap-1.5 text-[12px] text-success">
 				<span class="size-1.5 rounded-full bg-success"></span>
-				Connected{connections.connected.last_seen_at ? ` · ${formatRelative(connections.connected.last_seen_at)}` : ''}
+				{t('mcp.connected')}{connections.connected.last_seen_at ? ` · ${formatRelative(connections.connected.last_seen_at)}` : ''}
 			</span>
 		{:else if connections.active.length}
 			<span class="flex items-center gap-1.5 text-[12px] text-fg-muted">
-				<span class="size-1.5 rounded-full bg-warning"></span> Waiting for first call
+				<span class="size-1.5 rounded-full bg-warning"></span> {t('mcp.waiting')}
 			</span>
 		{:else if !connections.loading}
-			<span class="text-[12px] text-fg-subtle">Not connected</span>
+			<span class="text-[12px] text-fg-subtle">{t('mcp.not_connected')}</span>
 		{/if}
 	</header>
 
@@ -49,16 +50,16 @@
 
 		{#if connections.config}
 			<CodeBlock
-				filename=".vscode/mcp.json"
+				filename=".mcp.json"
 				language="json"
 				code={JSON.stringify(connections.config, null, 2)}
-				caption="Save it in the project you open in VS Code."
+				caption={t('mcp.config_caption')}
 			/>
 		{/if}
 		<ol class="flex list-decimal flex-col gap-1 pl-5 text-[13px] text-fg-muted">
-			<li>Add the configuration above. It contains no secrets, so it is safe to commit.</li>
-			<li>When VS Code shows that <code class="font-mono text-[12px]">learning-platform</code> needs authentication, choose <span class="font-medium text-fg">Authenticate</span>.</li>
-			<li>Approve access in the browser tab that opens. Your agent can only see and update your own course sessions.</li>
+			<li>{t('mcp.step_1')}</li>
+			<li>{t('mcp.step_2')}</li>
+			<li>{t('mcp.step_3')}</li>
 		</ol>
 
 		{#if !compact && connections.connections.length}
@@ -68,17 +69,17 @@
 						<span class="size-1.5 rounded-full {connection.status === 'connected' ? 'bg-success' : connection.status === 'revoked' ? 'bg-line-strong' : 'bg-warning'}"></span>
 						<span class="font-medium">{connection.label}</span>
 						{#if connection.auth_method === 'oauth'}
-							<span class="text-[11px] text-fg-subtle">Signed in</span>
+							<span class="text-[11px] text-fg-subtle">{t('mcp.signed_in')}</span>
 						{:else}
 							<code class="font-mono text-[11px] text-fg-subtle">{connection.token_hint}</code>
 						{/if}
 						<span class="ml-auto text-[12px] text-fg-muted">
-							{#if connection.revoked_at}Revoked
-							{:else if connection.last_seen_at}{connection.client_name ?? 'Agent'} · {formatRelative(connection.last_seen_at)}
-							{:else}Never used{/if}
+							{#if connection.revoked_at}{t('mcp.revoked')}
+							{:else if connection.last_seen_at}{connection.client_name ?? t('mcp.agent')} · {formatRelative(connection.last_seen_at)}
+							{:else}{t('mcp.never_used')}{/if}
 						</span>
 						{#if !connection.revoked_at}
-							<Button size="sm" variant="ghost" onclick={() => connections.revoke(connection.id)}>Revoke</Button>
+							<Button size="sm" variant="ghost" onclick={() => connections.revoke(connection.id)}>{t('mcp.revoke')}</Button>
 						{/if}
 					</li>
 				{/each}

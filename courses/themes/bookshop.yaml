@@ -1,0 +1,41 @@
+id: bookshop
+order: 3
+icon: book
+name: { en: Bookshop, nl: Boekwinkel }
+tagline: { en: "An independent shop for books of every kind", nl: "Een onafhankelijke winkel vol boeken" }
+vars:
+  en: { site_kind: bookshop website, business: bookshop, item: book, items: books, search_example: a book for my toddler }
+  nl: { site_kind: boekwinkelwebsite, business: boekwinkel, item: boek, items: boeken, search_example: boek voor mijn kleuter }
+data:
+  site: { name: De Leesvogel, city: Groningen }
+  items:
+    - { id: the-silent-harbour, name: The Silent Harbour, category: fiction, price: 22.5, description: "Literary novel about a lighthouse keeper on the cold northern coast who finds a letter from his late father.", tags: [literary, family] }
+    - { id: midnight-detective, name: The Midnight Detective, category: fiction, price: 19.99, description: "Crime thriller in which inspector Vos must find out who poisoned a famous chef.", tags: [crime, thriller, mystery] }
+    - { id: dragon-school, name: Dragon School, category: children, price: 14.99, description: "Fantasy adventure for readers aged 8 to 12 about a girl who trains a baby dragon.", tags: [fantasy, adventure] }
+    - { id: first-words-picture-book, name: My First Words, category: children, price: 9.99, description: "Sturdy board book with colourful pictures for toddlers aged 1 to 3.", tags: [picture book, toddlers] }
+    - { id: italian-kitchen, name: The Italian Kitchen, category: cooking, price: 29.95, description: "Cookbook with 120 classic pasta, risotto and pizza recipes.", tags: [italian, pasta] }
+    - { id: plant-based-everyday, name: Plant-Based Every Day, category: cooking, price: 27.5, description: "Cookbook with simple vegan recipes, without meat, eggs or dairy.", tags: [vegan, healthy] }
+    - { id: backpacking-scandinavia, name: Backpacking Scandinavia, category: travel, price: 24.99, description: "Travel guide for hiking and camping in Norway, Sweden and Finland, with maps of the best trails.", tags: [hiking, camping, outdoors] }
+    - { id: city-walks-lisbon, name: City Walks Lisbon, category: travel, price: 16.5, description: "Twelve walking routes through Lisbon with cafés and viewpoints.", tags: [city trip, walking] }
+    - { id: brief-history-of-stars, name: A Brief History of the Stars, category: science, price: 21, description: "Popular science book about galaxies, black holes and the origin of the universe.", tags: [astronomy, space] }
+    - { id: how-the-brain-learns, name: How the Brain Learns, category: science, price: 23.5, description: "Neuroscientist explains memory, sleep and how to study effectively.", tags: [psychology, learning] }
+    - { id: space-cats-comic, name: Space Cats, category: comics, price: 15, description: "Funny graphic novel about two cats who accidentally fly a rocket to the moon.", tags: [humour, graphic novel] }
+    - { id: learn-dutch-in-30-days, name: Learn Dutch in 30 Days, category: languages, price: 19.5, description: "Language course for beginners with daily exercises and audio.", tags: [language, course] }
+  pages:
+    - { id: about, title: About De Leesvogel, body: "De Leesvogel is an independent bookshop at Vismarkt 8 in Groningen. We are open on Monday from 12:00 to 18:00, Tuesday to Saturday from 9:30 to 18:00, and on Thursday until 21:00." }
+    - { id: ordering, title: Ordering books, body: "Books that are not in stock are ordered for you and are usually in the shop within 2 working days. Shipping within the Netherlands is free for orders above 20 euros." }
+    - { id: returns, title: Returns, body: "You can return books within 14 days with your receipt, as long as they are undamaged. Language courses with opened audio codes cannot be returned." }
+    - { id: book-club, title: Book club, body: "Our book club meets on the last Wednesday of every month at 19:30 in the shop. Joining costs 5 euros, including coffee and cake." }
+probes:
+  catalog: { count: 12, item_id: dragon-school, item_name: Dragon School, category: children, category_ids: [dragon-school, first-words-picture-book], item_price: 14.99, price_mentions: ["14.99", "14,99"] }
+  search:
+    dutch: { query: boek voor mijn kleuter, expected: first-words-picture-book }
+    paraphrase: { query: a story where someone has to solve a murder, expected: midnight-detective }
+    need: { query: I want to understand galaxies and black holes, expected: brief-history-of-stars }
+    situation: { query: cooking without meat or dairy, expected: plant-based-everyday }
+  vector: { query: a trip to the cold north with a tent, category: travel, expected: backpacking-scandinavia, excluded: the-silent-harbour }
+  rag:
+    fact: { question: "How late are you open on Thursday?", answer_any: ["21:00", "21.00", "9 pm", "9pm", "21 uur", nine, negen], source: about }
+    policy: { question: "How long do I have to return a book?", answer_any: ["14", two weeks, twee weken], source: returns }
+    detail: { question: "When does the book club meet?", answer_any: [last Wednesday, laatste woensdag], source: book-club }
+    unanswerable: { question: "Do you buy second-hand books from customers?" }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import { page } from '$app/state';
 	import AuthLayout from '#lib/components/layout/AuthLayout.svelte';
 	import Button from '#lib/components/ui/Button.svelte';
@@ -46,34 +47,29 @@
 	}
 </script>
 
-<svelte:head><title>Connect an agent · Learning Platform</title></svelte:head>
+<svelte:head><title>{t('connect.title')} · {t('app.name')}</title></svelte:head>
 
-<AuthLayout title="Connect an agent" subtitle="An application wants to use the learning platform as you.">
+<AuthLayout title={t('connect.title')} subtitle={t('connect.subtitle')}>
 	<div class="flex flex-col gap-4">
-		{#if error}<Notice tone="danger" title="Cannot connect">{error}</Notice>{/if}
+		{#if error}<Notice tone="danger" title={t('connect.cannot')}>{error}</Notice>{/if}
 
 		{#if redirected}
-			<Notice tone="success" title="Access granted">
-				Returning to {preview?.client_name}. You can close this tab once your editor confirms the sign-in.
+			<Notice tone="success" title={t('connect.granted')}>
+				{t('connect.returning', { client: preview?.client_name ?? '' })}
 			</Notice>
 		{:else if preview}
-			<p class="text-[14px]">
-				<span class="font-semibold">{preview.client_name}</span> is asking to connect to your account.
-			</p>
+			<p class="text-[14px]">{t('connect.asking', { client: preview.client_name })}</p>
 			<ul class="flex list-disc flex-col gap-1 pl-5 text-[13px] text-fg-muted">
-				<li>See your courses, current step and progress</li>
-				<li>Submit task results for your course sessions</li>
+				<li>{t('connect.scope_1')}</li>
+				<li>{t('connect.scope_2')}</li>
 			</ul>
-			<p class="text-[12px] text-fg-subtle">
-				It cannot see your password or other learners' sessions. You can revoke access at any time in
-				Settings. After you decide, your browser returns to <span class="font-mono">{preview.redirect_target}</span>.
-			</p>
+			<p class="text-[12px] text-fg-subtle">{t('connect.fine_print', { target: preview.redirect_target })}</p>
 			<div class="flex gap-2">
 				<Button variant="primary" class="h-9 flex-1" loading={deciding === 'allow'} disabled={deciding !== null} onclick={() => decide(true)}>
-					Allow
+					{t('connect.allow')}
 				</Button>
 				<Button class="h-9 flex-1" loading={deciding === 'deny'} disabled={deciding !== null} onclick={() => decide(false)}>
-					Deny
+					{t('connect.deny')}
 				</Button>
 			</div>
 		{:else if !error}
@@ -82,8 +78,8 @@
 	</div>
 	{#snippet footer()}
 		{#if auth.user}
-			Signed in as <span class="font-medium text-fg">{auth.user.email}</span>.
-			<button type="button" class="font-medium text-fg hover:underline" onclick={() => auth.logout()}>Not you?</button>
+			{t('connect.signed_in_as', { email: auth.user.email })}
+			<button type="button" class="font-medium text-fg hover:underline" onclick={() => auth.logout()}>{t('connect.not_you')}</button>
 		{/if}
 	{/snippet}
 </AuthLayout>

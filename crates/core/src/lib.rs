@@ -3,11 +3,13 @@
 //! Anything in this crate is part of the extension API surface; changes here
 //! ripple into every extension, so keep it small and stable.
 
+pub mod diagram;
 pub mod extension;
 pub mod outcome;
 pub mod status;
 pub mod step_type;
 
+pub use diagram::{Diagram, DiagramEdge, DiagramNode, NodeKind, SlotRule};
 pub use extension::{
     Capability, Extension, ExtensionError, ExtensionEvent, ExtensionManifest, StepContext,
     Submission, SubmissionSource, parse_config,

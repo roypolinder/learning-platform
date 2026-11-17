@@ -20,7 +20,8 @@ use tower_http::trace::TraceLayer;
 use crate::config::AppConfig;
 use crate::db;
 use crate::domains::{
-    auth, authoring, courses, extensions, integrations, oauth, progress, sessions, traffic, users,
+    auth, authoring, courses, extensions, integrations, learners, notes, oauth, progress, sessions,
+    traffic, users,
 };
 use crate::error::ApiError;
 use crate::http::csrf;
@@ -69,14 +70,16 @@ pub async fn bootstrap_with_pool(
     }
     let engine = Arc::new(build_engine(&config)?);
     extensions::repository::sync(&pool, engine.extensions().manifests()).await?;
+    let themes = courses::sync::load_theme_catalog(&config.courses_dir)?;
     let catalog = courses::sync::sync_courses(
         &pool,
         &engine,
+        &themes,
         &config.courses_dir,
         config.mutable_course_versions,
     )
     .await?;
-    Ok(AppState::new(config, pool, engine, catalog))
+    Ok(AppState::new(config, pool, engine, catalog, themes))
 }
 
 pub fn router(state: AppState, shutdown: CancellationToken) -> Router {
@@ -88,6 +91,8 @@ pub fn router(state: AppState, shutdown: CancellationToken) -> Router {
         .merge(progress::routes())
         .merge(extensions::routes())
         .merge(integrations::routes())
+        .merge(learners::routes())
+        .merge(notes::routes())
         .merge(authoring::routes())
         .merge(traffic::routes())
         .merge(oauth::routes())
@@ -112,11 +117,13 @@ pub fn router(state: AppState, shutdown: CancellationToken) -> Router {
         .as_ref()
         .filter(|dir| dir.is_dir())
     {
-        let index = dist.join("index.html");
+        // Prerendered pages (the landing pages) are served as files; every other route
+        // is the client-side app shell.
+        let shell = dist.join("200.html");
         app = app.fallback_service(
             ServeDir::new(dist)
                 .precompressed_gzip()
-                .fallback(ServeFile::new(index)),
+                .fallback(ServeFile::new(shell)),
         );
     }
 

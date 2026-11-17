@@ -1,16 +1,16 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: agent-skill-basics
-version: 1.1.0
-title: Create an AI agent skill
-summary: Package team know-how as a skill your coding agent loads exactly when it is needed.
+version: 2.0.0
+title: Teach your agent with skills
+summary: Write a skill that teaches your coding agent the conventions of your project, so it helps the same way in every course.
 description: |
-  Skills are folders with a `SKILL.md` file that teach an agent how to perform a specific task:
-  your release checklist, your migration conventions, the way your team reviews pull requests.
-  You will learn what makes a skill effective, write one with your own agent, and let the
-  platform verify its structure.
+  Skills are folders with a `SKILL.md` file that teach an agent how to perform a specific task
+  the way *you* want it done. You will learn how agents discover and load skills, and write a
+  skill with the conventions of {{theme.data.site.name}}: where the data lives, how the project
+  is structured and how your agent should coach you. Every later course benefits from it.
 category: AI agents
 difficulty: beginner
-order: 30
+order: 3
 estimated_minutes: 30
 tags: [skills, agents, copilot]
 objectives:
@@ -20,11 +20,22 @@ objectives:
 prerequisites:
   - title: Connect your AI agent over MCP
     course: mcp-first-connection
+glossary:
+  - term: Skill
+    definition: A folder with a `SKILL.md` file (and optionally scripts or reference files) that teaches an agent a specific task.
+  - term: SKILL.md
+    definition: The skill file. YAML frontmatter with `name` and `description`, followed by instructions in Markdown.
+  - term: Frontmatter
+    definition: The block between two `---` lines at the top of a Markdown file, with metadata in YAML.
+  - term: Progressive disclosure
+    definition: The agent first sees only the name and description of each skill, and loads the full instructions only when a request matches.
+  - term: Context window
+    definition: Everything a model can see at once. Smaller, relevant context gives better answers.
 extensions: [quiz, mcp, filesystem]
 help: |
-  The learner writes a skill for a task from their own work. Ask them which task they repeat
-  and what a good result looks like, then help them sharpen the description and turn the
-  instructions into concrete, verifiable steps. Don't write the skill for them.
+  The learner writes a conventions skill for their own website project. Ask what they want
+  their agent to know and do, then help them sharpen the description and turn the instructions
+  into concrete, verifiable steps. Don't write the skill for them.
 
 shared_sections:
   agent-connection:
@@ -61,8 +72,24 @@ sections:
 
           - The **description** decides whether your skill is ever used. Say what it does *and*
             when to use it.
-          - The **body** should read like a runbook: concrete steps, commands, and how to check
-            the result — not an essay.
+          - The **body** should read like a runbook: concrete steps, file paths, commands and how
+            to check the result — not an essay.
+
+      - id: loading-order
+        type: diagram_exercise
+        title: How an agent uses a skill
+        estimated_minutes: 3
+        config:
+          mode: order
+          prompt: Put the steps in the order in which an agent works with a skill.
+          chips:
+            - { id: index, label: "At startup it reads only the name and description of every skill" }
+            - { id: request, label: "You ask for something, for example a new page for your site" }
+            - { id: match, label: "The request matches the description of a skill" }
+            - { id: load, label: "It loads the full SKILL.md into its context" }
+            - { id: follow, label: "It follows the steps and checks the result" }
+        validation:
+          order: [index, request, match, load, follow]
 
       - id: anatomy
         type: code_example
@@ -99,22 +126,28 @@ sections:
         title: Pick the best description
         estimated_minutes: 2
         config:
-          prompt: Which description gives an agent the best chance to load the skill at the right moment?
+          prompt: Which description gives an agent the best chance to load your conventions skill at the right moment?
           explanation: Good descriptions state the capability and the trigger conditions in concrete terms.
           options:
             - id: vague
-              text: Helps with database stuff.
+              text: Helps with the website.
               explanation: Too vague — the agent cannot tell when this applies.
             - id: precise
-              text: Creates and reviews PostgreSQL migrations using our naming rules. Use when adding tables, columns or indexes.
+              text: "Conventions for the {{theme.data.site.name}} project: folder layout, the data files and how to coach me. Use when adding or changing features of the site."
               correct: true
             - id: long
-              text: This skill is a comprehensive, enterprise-grade, best-in-class solution for all data needs.
+              text: A comprehensive, best-in-class solution for all web development needs.
               explanation: Marketing language without triggers or scope.
 
   - id: build
-    title: Build your skill
+    title: Write your conventions skill
     steps:
+      - id: previous-course
+        type: prerequisite
+        title: Your agent is connected
+        config:
+          courses: [mcp-first-connection]
+
       - id: connection
         type: reusable_section
         title: Agent connection
@@ -123,34 +156,50 @@ sections:
 
       - id: write-skill
         type: filesystem_validation
-        title: Write a skill with your agent
+        title: Write the skill with your agent
         estimated_minutes: 12
         body: |
-          Pick a task you repeat at work — reviewing a migration, preparing a demo environment,
-          triaging a bug report. Ask your agent to help you write a skill for it in
-          `.github/skills/<name>/SKILL.md`.
+          Write a skill named `site-conventions` in `.github/skills/site-conventions/SKILL.md`. Ask
+          your agent to help, but decide the content yourself. A good conventions skill for
+          {{theme.data.site.name}} covers:
+
+          - **When to use:** whenever you add or change a feature of the site.
+          - **Project layout:** the seed data lives in `data/items.json` and `data/pages.json` and
+            is never edited by hand; where code and pages go once you have them.
+          - **How to help you:** you are learning, so the agent explains and hints instead of
+            writing whole features, and keeps technical terms in English.
+          - **How to check work:** for example "start the server and call the endpoint with curl".
 
           When you are happy with it, ask: **"Submit my skill to the learning platform for step
-          write-skill."** The agent sends the file through `report_task_result`.
+          write-skill."**
 
-          The platform checks that:
-
-          - the file has YAML frontmatter with a `name` and a `description` (max 1024 characters)
-          - there is a `## When to use` section and a `## Steps` section
-          - the instructions are substantial enough to be useful
+          The platform checks that the frontmatter has a `name` and `description`, that there are
+          `## When to use` and `## Steps` sections, and that the skill mentions your data files.
         help: |
           Check the frontmatter syntax (three dashes before and after, `name:` and `description:`),
           the exact section headings and whether the description says both what the skill does and
-          when to use it.
+          when to use it. The skill should mention data/items.json.
         validation:
           files:
-            - path: "**/SKILL.md"
-              label: SKILL.md
+            - path: "**/site-conventions/SKILL.md"
+              label: site-conventions/SKILL.md
               min_length: 300
-              contains: ["## When to use", "## Steps"]
+              contains: ["## When to use", "## Steps", "data/items.json"]
               frontmatter:
                 required: [name, description]
                 max_length: { name: 64, description: 1024 }
+
+      - id: try-it
+        type: manual_completion
+        title: Try it out
+        estimated_minutes: 3
+        body: |
+          Start a new chat and ask your agent: **"Where does the catalog of my site live, and how
+          should you help me when I build a feature?"**
+
+          If the skill works, the answer follows your conventions. If it doesn't, the
+          description probably doesn't match the question well enough: sharpen it and try again.
+          Commit the skill when you are done.
 
   - id: reflect
     title: Reflect
@@ -160,23 +209,17 @@ sections:
         title: When does your skill load?
         estimated_minutes: 3
         config:
-          prompt: Describe a request that should make an agent load your skill, and one that should not.
+          prompt: Describe a request that should make your agent load the site-conventions skill, and one that should not.
         validation:
           min_words: 25
           required_concepts:
             - label: the description or trigger
               any_of: [description, trigger, when]
 
-      - id: share
-        type: manual_completion
-        title: Share it with your team
-        optional: true
-        body: |
-          Commit the skill to your repository so everyone using an agent in that repository
-          benefits. Mark this step done once it is merged.
-
       - id: finish
         type: automatic_completion
-        title: Skill shipped
-        depends_on: [trigger-explanation]
-        body: Your agent now knows something it didn't this morning.
+        title: Your agent knows your project
+        depends_on: [trigger-explanation, try-it]
+        body: |
+          Your agent now knows how {{theme.data.site.name}} is organised. In the next course you
+          build the first page and a catalog API.

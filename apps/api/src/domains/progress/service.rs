@@ -1,13 +1,16 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use lp_core::{SessionStatus, StepStatus};
 use lp_course_engine::view::{CourseSummaryView, course_summary};
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::domains::courses::catalog::{LoadedCourse, RETIRED_VERSION};
+use crate::domains::learners::repository as learners;
 use crate::domains::sessions::dto::{SessionDto, percent, required_counts};
 use crate::domains::sessions::repository as sessions;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
 const RECENT_LIMIT: i64 = 12;
@@ -95,10 +98,9 @@ pub async fn course_progress(
         if result.contains_key(&session.course_slug) {
             continue;
         }
-        let loaded = state
-            .catalog
-            .version(&state.db, &state.engine, session.course_version_id)
-            .await?;
+        let Some(loaded) = loadable(state, session.course_version_id).await? else {
+            continue;
+        };
         let step_statuses = statuses.remove(&session.id).unwrap_or_default();
         let (completed, total) = required_counts(&loaded.course, |id| {
             step_statuses.get(id).copied().unwrap_or(StepStatus::Locked)
@@ -115,6 +117,23 @@ pub async fn course_progress(
     Ok(result)
 }
 
+/// Course versions from before a breaking engine change no longer compile (the catalog
+/// reports them once). Their sessions are left out of overviews instead of failing the page.
+async fn loadable(state: &AppState, version_id: Uuid) -> ApiResult<Option<Arc<LoadedCourse>>> {
+    match state
+        .catalog
+        .version(&state.db, &state.engine, version_id)
+        .await
+    {
+        Ok(loaded) => Ok(Some(loaded)),
+        Err(ApiError::Conflict {
+            code: RETIRED_VERSION,
+            ..
+        }) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 pub async fn overview(state: &AppState, user_id: Uuid) -> ApiResult<ProgressOverview> {
     let recent = sessions::list_for_user(&state.db, user_id, None, RECENT_LIMIT, 0).await?;
     let ids: Vec<Uuid> = recent.iter().map(|session| session.id).collect();
@@ -128,13 +147,17 @@ pub async fn overview(state: &AppState, user_id: Uuid) -> ApiResult<ProgressOver
         }
     }
 
+    let profile = learners::profile(&state.db, user_id).await?;
     let mut stats = ProgressStats::default();
     let mut summaries = Vec::with_capacity(recent.len());
     for session in &recent {
-        let loaded = state
-            .catalog
-            .version(&state.db, &state.engine, session.course_version_id)
-            .await?;
+        let Some(loaded) = loadable(state, session.course_version_id).await? else {
+            continue;
+        };
+        let loaded =
+            state
+                .catalog
+                .render(&state.engine, &loaded, profile.audience(&state.themes))?;
         let course = &loaded.course;
         let step_statuses = statuses.remove(&session.id).unwrap_or_default();
         let status_of = |id: &str| step_statuses.get(id).copied().unwrap_or(StepStatus::Locked);

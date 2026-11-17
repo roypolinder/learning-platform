@@ -1,0 +1,41 @@
+id: vintage-clothing
+order: 8
+icon: hanger
+name: { en: Vintage clothing, nl: Vintage kleding }
+tagline: { en: "Second-hand fashion with a story", nl: "Tweedehands mode met een verhaal" }
+vars:
+  en: { site_kind: vintage clothing website, business: vintage shop, item: piece, items: pieces, search_example: something warm for the winter }
+  nl: { site_kind: vintagekledingwebsite, business: vintagewinkel, item: kledingstuk, items: kledingstukken, search_example: iets warms voor de winter }
+data:
+  site: { name: Tweede Ronde, city: Amsterdam }
+  items:
+    - { id: denim-jacket-80s, name: 80s denim jacket, category: jackets, price: 55, description: "Faded blue denim jacket from the eighties with copper buttons.", tags: [denim, casual] }
+    - { id: leather-biker-jacket, name: Leather biker jacket, category: jackets, price: 120, description: "Black leather jacket with zips and a belted waist.", tags: [leather, rock] }
+    - { id: tweed-blazer, name: Tweed blazer, category: jackets, price: 65, description: "Smart wool tweed blazer that looks sharp at the office or a job interview.", tags: [smart, office] }
+    - { id: wool-coat-camel, name: Camel wool coat, category: coats, price: 95, description: "Long, heavy wool coat in camel that keeps you warm through the coldest winter days.", tags: [winter, warm] }
+    - { id: floral-summer-dress, name: Floral summer dress, category: dresses, price: 45, description: "Light seventies dress with a flower print, lovely for garden parties and summer weddings.", tags: [summer, flowers] }
+    - { id: sequin-party-dress, name: Sequin party dress, category: dresses, price: 70, description: "Sparkling silver dress covered in sequins, made for New Year's Eve and other parties.", tags: [party, glitter] }
+    - { id: levis-501, name: "Levi's 501 jeans", category: trousers, price: 50, description: "Classic straight-leg jeans in mid-blue, size 32/32.", tags: [denim, classic] }
+    - { id: corduroy-trousers, name: Corduroy trousers, category: trousers, price: 40, description: "Brown wide-leg corduroy trousers from the seventies.", tags: [retro] }
+    - { id: knitted-sweater-nordic, name: Nordic knitted sweater, category: knitwear, price: 48, description: "Thick hand-knitted wool sweater with a Nordic pattern.", tags: [wool, cosy] }
+    - { id: silk-scarf, name: Silk scarf, category: accessories, price: 25, description: "Square silk scarf with a colourful paisley print.", tags: [silk, gift] }
+    - { id: leather-boots, name: Leather boots, category: shoes, price: 85, description: "Brown leather ankle boots with a small heel, size 39.", tags: [leather] }
+    - { id: band-tshirt-90s, name: 90s band T-shirt, category: tops, price: 35, description: "Original faded tour shirt of a nineties grunge band.", tags: [music, grunge] }
+  pages:
+    - { id: about, title: About Tweede Ronde, body: "Tweede Ronde is a vintage shop at Haarlemmerdijk 55 in Amsterdam. We are open Tuesday to Saturday from 11:00 to 18:00 and on Sunday from 12:00 to 17:00." }
+    - { id: condition, title: Condition, body: "Every piece is cleaned before it goes on sale and graded A (like new), B (light signs of wear) or C (visible wear, priced accordingly)." }
+    - { id: returns, title: Returns, body: "Online purchases can be returned within 14 days. Purchases made in the shop cannot be refunded, but you can exchange them within 14 days." }
+    - { id: selling, title: Sell your clothes, body: "We buy clothing on Wednesdays by appointment. You receive 30% of the resale price in cash, or 40% as store credit." }
+probes:
+  catalog: { count: 12, item_id: levis-501, item_name: "Levi's 501 jeans", category: dresses, category_ids: [floral-summer-dress, sequin-party-dress], item_price: 50, price_mentions: ["50"] }
+  search:
+    dutch: { query: iets warms voor de winter, expected: wool-coat-camel }
+    paraphrase: { query: an outfit for a New Year's Eve party, expected: sequin-party-dress }
+    need: { query: something smart to wear to a job interview, expected: tweed-blazer }
+    situation: { query: merch from a grunge band, expected: band-tshirt-90s }
+  vector: { query: something to wear to a summer wedding, category: dresses, expected: floral-summer-dress, excluded: silk-scarf }
+  rag:
+    fact: { question: "What are your opening hours on Sunday?", answer_any: ["12:00", "12.00", noon, "12 uur", "17:00", "17.00", "5 pm"], source: about }
+    policy: { question: "Can I get my money back for something I bought in the shop?", answer_any: [exchange, ruilen, omruilen], source: returns }
+    detail: { question: "How much do I get when I sell clothes for store credit?", answer_any: ["40"], source: selling }
+    unanswerable: { question: "Do you offer alterations or tailoring?" }

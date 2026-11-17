@@ -1,3 +1,4 @@
+import { i18n, t } from '#lib/i18n/index.svelte.ts';
 import type { ApiErrorBody } from '#lib/types/api.ts';
 
 export class ApiError extends Error {
@@ -30,7 +31,8 @@ export class ApiError extends Error {
 type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
-	const headers: Record<string, string> = { accept: 'application/json' };
+	// Visitors who are not signed in get course content in the language they picked.
+	const headers: Record<string, string> = { accept: 'application/json', 'accept-language': i18n.locale };
 	if (method !== 'GET') headers['x-requested-with'] = 'lp-web';
 	if (body !== undefined) headers['content-type'] = 'application/json';
 
@@ -43,7 +45,7 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
 			body: body === undefined ? undefined : JSON.stringify(body)
 		});
 	} catch {
-		throw new ApiError(0, 'network_error', 'Cannot reach the platform. Is the API running?');
+		throw new ApiError(0, 'network_error', t('common.network_error'));
 	}
 
 	if (response.status === 204) return undefined as T;

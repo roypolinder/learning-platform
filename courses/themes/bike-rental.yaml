@@ -1,0 +1,41 @@
+id: bike-rental
+order: 1
+icon: bike
+name: { en: Bike rental, nl: Fietsverhuur }
+tagline: { en: "Rent city bikes, e-bikes and cargo bikes", nl: "Stadsfietsen, e-bikes en bakfietsen huren" }
+vars:
+  en: { site_kind: bike rental website, business: bike rental shop, item: bike, items: bikes, search_example: a bike for a mother with a toddler }
+  nl: { site_kind: fietsverhuurwebsite, business: fietsverhuur, item: fiets, items: fietsen, search_example: fiets voor moeder }
+data:
+  site: { name: Velora Bikes, city: Utrecht }
+  items:
+    - { id: city-bike, name: City bike, category: city, price: 12, description: "Classic upright city bike with 3 gears, a bell, lights and a sturdy lock. Easy for everyday rides through town.", tags: [everyday, upright] }
+    - { id: city-bike-child-seat, name: City bike with child seat, category: city, price: 15, description: "City bike with a rear child seat for toddlers up to 22 kg, 7 gears and a low step-through frame. Ideal for parents riding with a small child.", tags: [family, child seat, parents] }
+    - { id: e-bike, name: Electric city bike, category: electric, price: 25, description: "Pedal-assist e-bike with a range of about 70 km per charge. Arrive without breaking a sweat.", tags: [electric, commuting] }
+    - { id: e-cargo-bike, name: Electric cargo bike, category: cargo, price: 45, description: "Electric box bike with a bench and seat belts for two children and a rain cover. Also carries groceries.", tags: [family, kids, electric, transport] }
+    - { id: transport-bike, name: Transport bike, category: city, price: 16, description: "Strong bike with a large front carrier for shopping bags, crates or luggage.", tags: [luggage, shopping] }
+    - { id: road-bike, name: Road bike, category: sport, price: 35, description: "Lightweight carbon road bike with 22 gears and drop handlebars, built for fast rides over long distances.", tags: [fast, training, long distance] }
+    - { id: mountain-bike, name: Mountain bike, category: sport, price: 30, description: "Full-suspension mountain bike with wide tyres for forest trails and mud.", tags: [off-road, trails] }
+    - { id: tandem, name: Tandem, category: leisure, price: 30, description: "One bike for two riders, one behind the other. A fun way to explore the countryside together.", tags: [couples, together] }
+    - { id: kids-bike-20, name: "Kids' bike 20 inch", category: kids, price: 8, description: "Bike for children aged about 6 to 9, with a coaster brake and mudguards.", tags: [children] }
+    - { id: kids-bike-16, name: "Kids' bike 16 inch", category: kids, price: 7, description: "Small bike with removable training wheels for children aged about 4 to 6.", tags: [children, training wheels] }
+    - { id: folding-bike, name: Folding bike, category: city, price: 14, description: "Folds in 20 seconds into a compact package you can take on trains and buses for free.", tags: [compact, travel, train] }
+    - { id: child-trailer, name: Child trailer, category: accessories, price: 10, description: "Trailer for up to two children that attaches to any of our bikes. Includes a rain cover.", tags: [kids, accessory] }
+  pages:
+    - { id: about, title: About Velora Bikes, body: "Velora Bikes rents bikes from our shop at Stationsplein 12 in Utrecht, right next to the central station. We are open Monday to Saturday from 7:00 to 21:00 and on Sundays from 9:00 to 18:00. Helmets in three sizes are free with every rental." }
+    - { id: rental-terms, title: Rental terms, body: "Bring a valid ID to pick up a bike. We charge a deposit of 50 euros per regular bike and 200 euros for electric bikes and cargo bikes, refunded when you return the bike undamaged. Returning late costs 5 euros for every hour started." }
+    - { id: cancellation, title: Cancellation and refunds, body: "You can cancel for free up to 24 hours before pickup. If you cancel later, you receive a voucher worth half of the rental price. If you do not show up, there is no refund." }
+    - { id: breakdowns, title: Flat tyres and theft, body: "With a flat tyre in the city centre, call our roadside assistance on 030 123 4567: a mechanic reaches you within 45 minutes. Report a stolen bike to the police within 24 hours. If the bike was locked with our chain lock, you only pay an excess of 75 euros." }
+probes:
+  catalog: { count: 12, item_id: e-bike, item_name: Electric city bike, category: kids, category_ids: [kids-bike-20, kids-bike-16], item_price: 25, price_mentions: ["25"] }
+  search:
+    dutch: { query: fiets voor moeder, expected: city-bike-child-seat }
+    paraphrase: { query: something I can take with me on the train, expected: folding-bike }
+    need: { query: I want to ride fast on long country roads, expected: road-bike }
+    situation: { query: "We are a couple and want to pedal the same bike together", expected: tandem }
+  vector: { query: something to carry my children, category: city, expected: city-bike-child-seat, excluded: e-cargo-bike }
+  rag:
+    fact: { question: "What time do you open on Sundays?", answer_any: ["9:00", "9.00", "9 am", "9am", "09:00", nine, negen], source: about }
+    policy: { question: "How much is the deposit for an electric bike?", answer_any: ["200"], source: rental-terms }
+    detail: { question: "What happens if I cancel two hours before pickup?", answer_any: [voucher, half, "50%", tegoedbon, helft], source: cancellation }
+    unanswerable: { question: "Do you organise guided bike tours to Amsterdam?" }

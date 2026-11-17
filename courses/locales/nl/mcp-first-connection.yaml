@@ -1,0 +1,219 @@
+title: Koppel je AI agent via MCP
+summary: Leer hoe het Model Context Protocol werkt, koppel je coding agent aan het platform en laat hem de seed data van je project ophalen.
+description: |
+  Het Model Context Protocol (MCP) is de open standaard waarmee AI agents met tools en data
+  praten. In deze cursus leer je de bouwstenen, schrijf je een echte client-configuratie en koppel
+  je de agent in je eigen editor aan de MCP server van het platform door in te loggen met OAuth.
+
+  Daarna zet je agent die verbinding meteen in voor {{theme.data.site.name}}: hij haalt de seed
+  data van je project op bij het platform en slaat die op in je workspace. Het platform ziet de
+  verbinding en controleert de bestanden — geen screenshots, geen tokens kopiëren.
+category: AI-tooling
+objectives:
+  - Uitleggen waar MCP hosts, clients en servers verantwoordelijk voor zijn
+  - Tools, resources en prompts van elkaar onderscheiden
+  - Een HTTP MCP server voor je agent configureren zonder geheimen op te slaan
+  - Een agent via OAuth laten inloggen bij een remote MCP server en de tools in je project gebruiken
+prerequisites: [Start je project]
+glossary:
+  MCP: Model Context Protocol. De open standaard waarmee AI agents tools en data uit andere programma's kunnen gebruiken.
+  Host: De applicatie waarin je werkt, zoals VS Code. Die start één MCP client per server.
+  MCP client: Het onderdeel in de host dat de sessie met één MCP server bijhoudt.
+  MCP server: Een programma dat via MCP tools, resources of prompts aanbiedt, zoals dit learning platform.
+  Tool: Een functie die het model zelf kan besluiten aan te roepen, met een naam, een beschrijving en een JSON Schema voor de input.
+  Resource: Alleen-lezen data met een URI, die de applicatie als context kan toevoegen.
+  Prompt: Een herbruikbaar sjabloon dat de gebruiker zelf kiest, vaak als slash command.
+  Streamable HTTP: Het MCP-transport voor remote servers. De client stuurt JSON-RPC-berichten met HTTP POST naar één endpoint.
+  JSON-RPC: Een klein protocol om methodes aan te roepen met JSON-berichten. MCP-berichten zijn JSON-RPC 2.0.
+  OAuth: De standaard om een applicatie namens jou te laten inloggen. Je agent krijgt een access token zonder dat jij iets hoeft te kopiëren.
+sections:
+  foundations:
+    title: Hoe MCP werkt
+    description: De woorden die je nodig hebt voordat je iets gaat koppelen.
+    steps:
+      what-is-mcp:
+        title: Waarom een protocol voor agents?
+        body: |
+          Elke AI coding agent heeft context nodig: je bestanden, je issue tracker, het schema van
+          je database. Vóór MCP had elke agent zijn eigen integraties, en moest elke toolmaker per
+          agent een aparte plugin bouwen.
+
+          **MCP maakt van dat N×M-probleem N+M.** Een tool biedt zijn mogelijkheden één keer aan
+          als *MCP server*; elke agent die MCP spreekt kan hem gebruiken.
+
+          Berichten zijn JSON-RPC 2.0. Lokale servers draaien meestal als child process via
+          *stdio*; remote servers, zoals de onze, gebruiken het transport **Streamable HTTP**: de
+          client POST requests naar één endpoint en de server antwoordt met JSON of een stroom
+          events.
+
+          Remote servers moeten ook weten **wie** er belt. MCP gebruikt daarvoor OAuth 2.1:
+
+          1. De client roept de server aan zonder credentials en krijgt `401 Unauthorized`. De
+             header `WWW-Authenticate` wijst naar de *protected resource metadata* van de server.
+          2. Die metadata noemt een *authorization server*, waarvan de eigen metadata de
+             endpoints voor inloggen, tokens en registratie bevat.
+          3. De client registreert zich, opent je browser om in te loggen en toegang te geven, en
+             krijgt een access token dat hij vanaf dan meestuurt als `Authorization: Bearer …`.
+
+          Je kopieert nooit zelf een token, en er komt niets geheims in een configuratiebestand.
+      roles:
+        title: Host, client en server
+        body: |
+          Dit is de opstelling die je zo gaat bouwen. Kies een vak om te zien waar het
+          verantwoordelijk voor is.
+        config:
+          nodes:
+            - { id: you, label: Jij, detail: "Je vraagt je agent iets in de chat van je editor." }
+            - { id: host, label: "VS Code (host)", detail: "De **host** is de applicatie waarin je werkt. Die voert het gesprek met het model en start één MCP client per geconfigureerde server." }
+            - { id: client, label: MCP client, detail: "De **client** onderhoudt de sessie met één server: hij logt in, vraagt de tools op en stuurt de calls die het model wil doen." }
+            - { id: server, label: "Learning platform (server)", detail: "De **server** biedt tools zoals `get_project` en `get_current_step`, en bepaalt wat elke aanroeper mag zien." }
+            - { id: model, label: Taalmodel, detail: "Het model *stelt* tool calls alleen *voor*. De host en client voeren ze uit." }
+          edges:
+            - { from: you, to: host, label: chat }
+            - { from: host, to: model, label: prompt + tools }
+            - {}
+            - { from: client, to: server, label: JSON-RPC via HTTP }
+      primitives:
+        title: Tools, resources en prompts
+        body: |
+          Een MCP server kan drie soorten dingen aanbieden:
+
+          - **Tools** zijn functies die het **model** besluit aan te roepen, zoals `create_issue`
+            of `get_current_step`. Elke tool heeft een naam, een beschrijving en een JSON Schema
+            voor de input. Tools kunnen bijwerkingen hebben; daarom vragen hosts je toestemming
+            voordat ze die uitvoeren.
+          - **Resources** zijn alleen-lezen data die de **applicatie** als context kan toevoegen:
+            een bestand, een tabelschema, een stuk log. Ze hebben een URI, zoals
+            `file:///src/main.rs`.
+          - **Prompts** zijn herbruikbare sjablonen die de **gebruiker** zelf kiest, vaak als
+            slash command.
+
+          Een handige vuistregel: tools worden door het model aangestuurd, resources door de
+          applicatie, prompts door de gebruiker. De juiste kiezen is vooral de vraag wie moet
+          beslissen wanneer iets gebruikt wordt.
+      place-roles:
+        title: Zet de rollen op hun plek
+        config:
+          prompt: Sleep elk label naar het juiste vak. Eén label hoort nergens bij.
+          nodes:
+            - { id: you, label: Jij }
+            - { id: model, label: Taalmodel }
+          chips:
+            - { id: host, label: Host (je editor) }
+            - { id: server, label: MCP server (het platform) }
+      check-basics:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: transport
+              prompt: Welk transport gebruikt een remote MCP server zoals dit platform?
+              explanation: Remote servers gebruiken Streamable HTTP; stdio werkt alleen voor processen op je eigen computer.
+            - id: control
+              prompt: Welke bouwsteen wordt meestal door het model zelf aangeroepen?
+              explanation: Tools worden door het model aangestuurd. Hosts vragen meestal om bevestiging voordat ze die uitvoeren.
+            - id: authorization
+              prompt: Hoe weet een MCP client waar hij moet inloggen bij een remote server?
+              explanation: De 401-response wijst naar de protected resource metadata, die de authorization server en zijn endpoints noemt.
+              options:
+                - { id: challenge, text: "Uit de 401-response van de server en zijn OAuth-metadata" }
+                - { id: config, text: Je plakt de inlog-URL in het configuratiebestand }
+                - { id: none, text: Remote MCP servers kunnen geen authenticatie vereisen }
+      review-basics:
+        title: Even herhalen
+        body: |
+          Je bent geslaagd, maar niet elk antwoord was goed. Twee dingen gaan vaak mis:
+
+          1. **stdio of HTTP.** Met stdio moet de host de server als lokaal proces starten. Een
+             platform dat ergens anders draait, bereik je alleen via HTTP.
+          2. **Discovery.** Een client hoeft niet te horen waar hij moet inloggen. De
+             `401`-response van de server leidt hem naar de OAuth-metadata en van daaruit naar de
+             inlogpagina.
+  connect:
+    title: Koppel je agent
+    description: Configureer je editor en laat zien dat de verbinding werkt.
+    steps:
+      previous-course:
+        title: Je project staat klaar
+        body: Voor de rest van deze cursus heb je de projectmap uit "Start je project" nodig.
+      config-example:
+        title: Een configuratie zonder geheimen
+        body: |
+          VS Code leest de MCP servers van een project uit `.mcp.json` in de root van de projectmap,
+          hetzelfde bestand dat andere agents lezen. Elke entry onder `mcpServers` heeft alleen een
+          transporttype en een URL nodig; `tools` bepaalt welke tools van de server de agent mag
+          gebruiken.
+
+          Let op wat er **niet** in staat: geen token, geen header `Authorization` en geen
+          `inputs`-prompt. Het platform ondersteunt OAuth, dus je editor laat je inloggen via de
+          browser en bewaart de credentials zelf. Daardoor kun je het bestand gerust committen.
+        config:
+          snippets:
+            - caption: Credentials komen van het inloggen, nooit uit het bestand.
+      config-blanks:
+        title: Maak de server-entry af
+        config:
+          prompt: Vul de ontbrekende waarden van de configuratie in.
+          blanks:
+            - { id: root, hint: De key op het hoogste niveau waaronder de servers staan. }
+            - { id: transport, hint: Het transporttype voor remote servers. }
+            - { id: path, hint: Het pad van het endpoint van de MCP server van het platform. }
+      connect-agent:
+        title: Log in en roep een tool aan
+        body: |
+          1. Sla de configuratie op als `.mcp.json` in de root van je projectmap en open die map
+             in VS Code.
+          2. Start een chat in agent mode. De server `learning-platform` laat zien dat hij
+             authenticatie nodig heeft. Kies **Authenticate** bij de acties van de server.
+          3. Je browser opent dit platform en vraagt je om toegang te geven. Log zo nodig in en
+             kies **Toestaan**. Ga terug naar VS Code zodra je het tabblad mag sluiten.
+          4. Vraag je agent: **"Gebruik het learning platform om mijn huidige stap te laten
+             zien."**
+
+          Je agent roept `get_current_step` aan. Zodra dat gebeurt, rondt deze stap af.
+      fetch-project:
+        title: Laat je agent je seed data ophalen
+        body: |
+          Laat de verbinding nu iets nuttigs doen voor {{theme.data.site.name}}. Vraag je agent:
+
+          > Gebruik de tool `get_project` van het learning platform. Sla de catalogus uit de seed
+          > data ongewijzigd op als `data/items.json` en de sitepagina's als `data/pages.json`.
+          > Voeg daarna een korte beschrijving van de site toe aan `README.md`. Stuur de bestanden
+          > als je klaar bent in voor stap `fetch-project`.
+
+          Lees de bestanden die je agent maakt: dit is de data die je website vanaf de volgende
+          cursus serveert, en de data die de verborgen checks verwachten.
+        validation:
+          files:
+            - { path: data/items.json, label: data/items.json bevat de catalogus }
+            - { path: data/pages.json, label: data/pages.json bevat de sitepagina's }
+            - { path: README.md, label: "README.md beschrijft {{theme.data.site.name}}" }
+      verify-config:
+        title: Laat je agent de configuratie insturen
+        body: |
+          Vraag je agent: **"Stuur mijn .mcp.json naar het learning platform voor stap
+          verify-config."** Die roept `report_task_result` aan met het bestand.
+
+          Het platform controleert dat de server HTTP gebruikt, naar `/mcp` wijst en dat er geen
+          credentials in het bestand staan. Commit je werk daarna.
+        validation:
+          rules:
+            - { label: De server gebruikt het HTTP-transport }
+            - { label: De URL wijst naar het MCP-endpoint }
+            - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Leg het uit aan een collega
+        config:
+          prompt: Leg in twee of drie zinnen aan een collega uit waarom je een functie als MCP tool aanbiedt in plaats van een editor-plugin te bouwen.
+          placeholder: Een MCP tool zorgt ervoor dat…
+        validation:
+          required_concepts:
+            - any_of: [agent, client, reuse, any, once, hergebruik, elke, iedere, één keer, eenmaal]
+      finish:
+        title: Je bent gekoppeld
+        body: |
+          Je agent kan met het platform praten en je workspace heeft de seed data voor
+          {{theme.data.site.name}}. Hierna leer je je agent de afspraken van je project met een
+          skill.

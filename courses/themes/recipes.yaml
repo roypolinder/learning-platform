@@ -1,0 +1,41 @@
+id: recipes
+order: 5
+icon: pan
+name: { en: Recipe site, nl: Receptenwebsite }
+tagline: { en: "Recipes for every day and every diet", nl: "Recepten voor elke dag en elk dieet" }
+vars:
+  en: { site_kind: recipe website, business: recipe site, item: recipe, items: recipes, search_example: a quick dinner after work }
+  nl: { site_kind: receptenwebsite, business: receptenwebsite, item: recept, items: recepten, search_example: snel avondeten na het werk }
+data:
+  site: { name: Pan & Plezier, city: Leiden }
+  items:
+    - { id: overnight-oats, name: Overnight oats, category: breakfast, price: 1.2, description: "Oats soaked overnight in milk with berries and honey. Ready when you wake up.", tags: [make ahead, sweet] }
+    - { id: shakshuka, name: Shakshuka, category: breakfast, price: 2.5, description: "Eggs poached in a spicy tomato and pepper sauce, served with bread.", tags: [eggs, spicy] }
+    - { id: banana-pancakes, name: Three-ingredient banana pancakes, category: breakfast, price: 0.9, description: "Pancakes made from banana, egg and oats. So easy that young children can help.", tags: [kids, easy, sweet] }
+    - { id: lentil-soup, name: Red lentil soup, category: lunch, price: 1.1, description: "Cheap and filling vegan soup with red lentils, carrot and cumin.", tags: [vegan, budget] }
+    - { id: caprese-sandwich, name: Caprese sandwich, category: lunch, price: 2.8, description: "Ciabatta with mozzarella, tomato and basil.", tags: [vegetarian, quick] }
+    - { id: chicken-curry, name: Chicken curry, category: dinner, price: 3.4, description: "Mild coconut curry with chicken, served with rice.", tags: [mild, family] }
+    - { id: mushroom-risotto, name: Mushroom risotto, category: dinner, price: 3.1, description: "Creamy vegetarian rice dish with mushrooms and parmesan.", tags: [vegetarian, creamy] }
+    - { id: salmon-traybake, name: Salmon traybake, category: dinner, price: 4.6, description: "Salmon with potatoes and green beans from one tray in the oven. Ready in 20 minutes on a busy weekday.", tags: [fast, one tray, weekday] }
+    - { id: stamppot, name: Kale stamppot, category: dinner, price: 2.2, description: "Traditional Dutch comfort food: mashed potatoes with kale and smoked sausage, for cold winter evenings.", tags: [dutch, winter, traditional] }
+    - { id: chocolate-mousse, name: Chocolate mousse, category: dessert, price: 1.9, description: "Airy mousse of dark chocolate and whipped egg whites.", tags: [chocolate] }
+    - { id: apple-crumble, name: Apple crumble, category: dessert, price: 1.7, description: "Baked apples with cinnamon under a crunchy butter crumble topping.", tags: [fruit, warm] }
+    - { id: hummus, name: Homemade hummus, category: snack, price: 1.3, description: "Chickpeas blended with tahini, lemon and garlic. Great with vegetables.", tags: [vegan, dip] }
+  pages:
+    - { id: about, title: About Pan & Plezier, body: "Pan & Plezier is a recipe site by chef Noor de Wit from Leiden. Every recipe is tested at least three times in a normal home kitchen before it is published." }
+    - { id: membership, title: Free and Premium, body: "With a free account you can save your favourite recipes. Premium costs 3 euros per month and adds weekly meal plans and automatic shopping lists." }
+    - { id: substitutions, title: Substitutions, body: "No eggs? Replace one egg with one tablespoon of ground flaxseed mixed with three tablespoons of water, or with half a mashed banana in sweet recipes." }
+    - { id: contact, title: Contact, body: "We answer questions about recipes within two working days via the contact form. We do not take recipe requests through social media." }
+probes:
+  catalog: { count: 12, item_id: lentil-soup, item_name: Red lentil soup, category: dessert, category_ids: [chocolate-mousse, apple-crumble], item_price: 1.1, price_mentions: ["1.1", "1,1"] }
+  search:
+    dutch: { query: snel avondeten na het werk, expected: salmon-traybake }
+    paraphrase: { query: traditional Dutch comfort food for cold evenings, expected: stamppot }
+    need: { query: a creamy rice dish without meat, expected: mushroom-risotto }
+    situation: { query: something my toddler can help make for breakfast, expected: banana-pancakes }
+  vector: { query: a sweet treat with fruit, category: dessert, expected: apple-crumble, excluded: banana-pancakes }
+  rag:
+    fact: { question: "Who writes the recipes?", answer_any: [Noor], source: about }
+    policy: { question: "How much does Premium cost?", answer_any: ["3"], source: membership }
+    detail: { question: "What can I use instead of an egg?", answer_any: [flax, lijnzaad, banana, banaan], source: substitutions }
+    unanswerable: { question: "Do you sell a printed cookbook?" }

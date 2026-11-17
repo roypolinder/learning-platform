@@ -1,0 +1,41 @@
+id: animal-shelter
+order: 9
+icon: paw
+name: { en: Animal shelter, nl: Dierenasiel }
+tagline: { en: "Find a cat, dog or rabbit to adopt", nl: "Vind een kat, hond of konijn om te adopteren" }
+vars:
+  en: { site_kind: animal shelter website, business: animal shelter, item: animal, items: animals, search_example: a calm dog for an older owner }
+  nl: { site_kind: dierenasielwebsite, business: dierenasiel, item: dier, items: dieren, search_example: rustige hond voor een oudere eigenaar }
+data:
+  site: { name: Pootjes, city: Zwolle }
+  items:
+    - { id: max-labrador, name: Max, category: dogs, price: 175, description: "Energetic 4-year-old labrador who loves children, swimming and long walks.", tags: [labrador, active, children] }
+    - { id: bella-senior-dog, name: Bella, category: dogs, price: 175, description: "Gentle 11-year-old dog who is calm indoors and only needs short walks. Perfect for a quiet household or an elderly owner.", tags: [senior, calm] }
+    - { id: rocky-terrier, name: Rocky, category: dogs, price: 175, description: "Clever terrier who needs an experienced owner and a home without cats.", tags: [experienced owner] }
+    - { id: sam-small-dog, name: Sam, category: dogs, price: 175, description: "Small, quiet dog that fits well in an apartment.", tags: [small, apartment] }
+    - { id: luna-cat, name: Luna, category: cats, price: 95, description: "Shy indoor cat who needs a calm home and time to settle in.", tags: [indoor, shy] }
+    - { id: tijger-kitten, name: Tijger, category: cats, price: 95, description: "Playful 4-month-old kitten who chases everything that moves.", tags: [kitten, playful, young] }
+    - { id: oscar-cat, name: Oscar, category: cats, price: 95, description: "Nine-year-old cat who loves cuddling on the sofa and gets along with dogs.", tags: [lap cat, affectionate] }
+    - { id: shadow-barn-cat, name: Shadow, category: cats, price: 50, description: "Independent cat who wants to live outdoors, for example on a farm.", tags: [outdoor, independent] }
+    - { id: duo-rabbits, name: Pip and Pop, category: rabbits, price: 60, description: "Bonded pair of rabbits that must be adopted together, with a garden hutch.", tags: [pair, garden] }
+    - { id: snowball-rabbit, name: Snowball, category: rabbits, price: 35, description: "White rabbit who is used to being handled.", tags: [tame] }
+    - { id: guinea-pigs, name: Bonnie and Clyde, category: small-animals, price: 30, description: "Two friendly guinea pigs. A good first pet for children that needs no walks.", tags: [children, first pet] }
+    - { id: kiwi-parakeet, name: Kiwi, category: birds, price: 25, description: "Green parakeet that whistles and can learn a few words.", tags: [bird, talking] }
+  pages:
+    - { id: about, title: About Pootjes, body: "Animal shelter Pootjes is in Zwolle. You can visit the animals from Wednesday to Sunday between 13:00 and 16:30." }
+    - { id: adoption, title: Adopting, body: "To adopt, fill in the form on our website, after which we invite you for an intake conversation. For dogs we also do a home visit. The adoption fee is 95 euros for a cat and 175 euros for a dog, including a microchip and vaccinations." }
+    - { id: volunteering, title: Volunteering, body: "Volunteers must be at least 16 years old. Dog walkers are especially welcome on Saturday mornings." }
+    - { id: found-animals, title: "Found an animal?", body: "Report a found or injured animal by calling 038 765 4321. Our animal ambulance is available 24 hours a day." }
+probes:
+  catalog: { count: 12, item_id: luna-cat, item_name: Luna, category: rabbits, category_ids: [duo-rabbits, snowball-rabbit], item_price: 95, price_mentions: ["95"] }
+  search:
+    dutch: { query: rustige hond voor een oudere eigenaar, expected: bella-senior-dog }
+    paraphrase: { query: a cat that loves to cuddle on the couch, expected: oscar-cat }
+    need: { query: two animals that have to stay together, expected: duo-rabbits }
+    situation: { query: a bird that can learn to whistle and talk, expected: kiwi-parakeet }
+  vector: { query: a playful young animal, category: cats, expected: tijger-kitten, excluded: max-labrador }
+  rag:
+    fact: { question: "When can I visit the animals?", answer_any: ["13:00", "13.00", "1 pm", "1pm", "13 uur", "16:30", "16.30"], source: about }
+    policy: { question: "How much is the adoption fee for a dog?", answer_any: ["175"], source: adoption }
+    detail: { question: "How old do I need to be to volunteer?", answer_any: ["16"], source: volunteering }
+    unanswerable: { question: "Do you offer grooming for pets?" }

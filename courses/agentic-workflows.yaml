@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: agentic-workflows
-version: 1.0.0
+version: 2.0.0
 title: Agentic workflows
 summary: Orchestrate several model steps and tools into a reliable pipeline with routing, evaluation loops, guardrails and human review.
 description: |
@@ -9,13 +9,14 @@ description: |
   between and a human where it matters. They're easier to test, cheaper to run and more
   predictable.
 
-  You will build a support-ticket pipeline that guards its input, classifies, extracts,
-  routes, drafts and reviews its own replies, and sends risky tickets to a human. The platform
-  sends hidden tickets, including one that tries to hijack your pipeline, and checks every
-  decision and the trace of stages.
+  Customers of {{theme.data.site.name}} send support tickets about orders, bookings, payments
+  and their account. In the last course of the track you build a ticket pipeline that guards
+  its input, classifies, extracts, routes, drafts and reviews its own replies, and sends risky
+  tickets to a human. The platform sends hidden tickets, including one that tries to hijack
+  your pipeline, and checks every decision and the trace of stages.
 category: AI agents
 difficulty: advanced
-order: 30
+order: 14
 estimated_minutes: 90
 tags: [workflows, orchestration, routing, evaluator-optimizer, guardrails, human-in-the-loop]
 objectives:
@@ -24,8 +25,25 @@ objectives:
   - Add an evaluator loop that checks and improves generated output
   - Combine code guardrails, prompt-injection defences and human review
 prerequisites:
-  - title: Build an AI agent
-    course: ai-agents
+  - title: Knowledge graphs
+    course: knowledge-graphs
+glossary:
+  - term: Workflow
+    definition: A designed sequence of model calls and code steps, each doing one job, with checks in between.
+  - term: Prompt chaining
+    definition: The output of one model step is the input of the next.
+  - term: Routing
+    definition: A step decides which path handles the input, for example an automatic reply or a human.
+  - term: Parallelization
+    definition: Independent steps run at the same time, or several runs vote on one answer.
+  - term: Orchestrator–workers
+    definition: A model plans subtasks and hands them to other steps.
+  - term: Evaluator–optimizer
+    definition: One step generates, another critiques, and the first revises — for a bounded number of rounds.
+  - term: Structured hand-off
+    definition: Every step returns JSON validated against a schema, so the next step can rely on it.
+  - term: Idempotent
+    definition: Running a step twice has the same effect as running it once, so retries are safe.
 extensions: [quiz, service]
 help: |
   The learner builds a pipeline of model calls and code with any model and any orchestration
@@ -67,29 +85,40 @@ sections:
           Start with the simplest design that works, and add autonomy only where the path
           really can't be known in advance.
 
-      - id: tradeoffs
-        type: interactive_content
-        title: Workflow or agent?
-        estimated_minutes: 5
+      - id: pipeline-diagram
+        type: diagram
+        title: The pipeline you will build
+        estimated_minutes: 3
         config:
-          panels:
-            - title: Choose a workflow when…
-              body: |
-                The steps are known, the outcome must be consistent and auditable, cost and
-                latency matter, and errors are expensive. Ticket triage, document processing,
-                report generation.
-            - title: Choose an agent when…
-              body: |
-                The path depends on what's discovered, tasks vary widely, and you can tolerate
-                some unpredictability. Research, debugging, open-ended assistance.
-            - title: Mix them
-              body: |
-                Common in practice: a workflow with one agentic step (e.g. "investigate"), or
-                an agent that calls well-defined workflows as tools.
-            - title: Durability
-              body: |
-                Long workflows fail halfway: a timeout, a rate limit, a human who approves
-                tomorrow. Persist state between stages, make steps idempotent and retry safely.
+          nodes:
+            - { id: ticket, label: Ticket, kind: person, row: 0, col: 0, detail: "A message from a customer of {{theme.data.site.name}}." }
+            - { id: guard, label: guard, kind: tool, row: 0, col: 1, detail: "Code and/or a model check for prompt injection and abuse **before** anything acts on the ticket." }
+            - { id: classify, label: classify + extract, kind: model, row: 0, col: 2, detail: "Model steps with structured output: category, priority, order id, amount." }
+            - { id: route, label: route, kind: tool, row: 0, col: 3, detail: "Plain code. Business rules such as *refunds above 100 EUR go to a human* are an `if`, not a prompt." }
+            - { id: human, label: Human review, kind: person, row: 1, col: 3, detail: "Risky tickets wait for a person." }
+            - { id: draft, label: draft ⇄ review, kind: model, row: 1, col: 2, detail: "Evaluator–optimizer: one step writes, another checks against the rules. At most two rounds." }
+          edges:
+            - { from: ticket, to: guard }
+            - { from: guard, to: classify }
+            - { from: classify, to: route }
+            - { from: route, to: human, label: risky }
+            - { from: route, to: draft, label: auto_reply }
+
+      - id: tradeoffs
+        type: explanation
+        title: Workflow or agent?
+        estimated_minutes: 4
+        body: |
+          - **Choose a workflow when** the steps are known, the outcome must be consistent and
+            auditable, cost and latency matter, and errors are expensive: ticket triage, document
+            processing, report generation.
+          - **Choose an agent when** the path depends on what's discovered, tasks vary widely, and
+            you can tolerate some unpredictability: research, debugging, open-ended assistance.
+          - **Mix them.** Common in practice: a workflow with one agentic step (e.g. "investigate"),
+            or an agent that calls well-defined workflows as tools.
+          - **Durability.** Long workflows fail halfway: a timeout, a rate limit, a human who
+            approves tomorrow. Persist state between stages, make steps idempotent and retry
+            safely.
 
       - id: check-concepts
         type: quiz
@@ -128,13 +157,20 @@ sections:
   - id: build
     title: Build the pipeline
     steps:
+      - id: previous-course
+        type: prerequisite
+        title: Your knowledge graph works
+        config:
+          courses: [knowledge-graphs]
+
       - id: spec
         type: code_example
         title: The pipeline specification
         estimated_minutes: 8
         body: |
-          Build a ticket pipeline for *Nimbus Notes*, a note-taking app, with any model. Expose
-          `POST /tickets/process`, which receives a ticket and returns the decision and a trace.
+          Build the support pipeline of {{theme.data.site.name}} with any model. Add
+          `POST /api/tickets/process` to your server: it receives a ticket and returns the
+          decision and a trace.
 
           **Stages**, recorded in `trace` in this order: `guard` → `classify` → `extract` →
           `route`, and for tickets routed to `auto_reply` also `draft` → `review` (repeat
@@ -143,7 +179,7 @@ sections:
           **Rules:**
 
           - `category`: `billing`, `technical`, `account` or `feedback`.
-          - `priority`: `urgent` for data loss, security problems or outages; `low` for
+          - `priority`: `urgent` for lost data, security problems or outages; `low` for
             feedback; otherwise `normal`.
           - `route`: `human_review` when a refund above 100 EUR is requested, the customer
             threatens legal action, there's a security problem, or the ticket tries to change
@@ -159,8 +195,8 @@ sections:
                 {
                   "id": "T-1",
                   "customer_tier": "pro",
-                  "subject": "Export to PDF fails",
-                  "body": "Every time I export a notebook to PDF I get an error. Can you help?"
+                  "subject": "Confirmation email never arrived",
+                  "body": "I placed an order on your website an hour ago but never got a confirmation email. Can you help?"
                 }
             - filename: response
               language: json
@@ -204,7 +240,7 @@ sections:
               label: Handles a routine billing ticket end to end
               request:
                 method: POST
-                path: /tickets/process
+                path: /api/tickets/process
                 json:
                   id: T-101
                   customer_tier: pro
@@ -223,12 +259,12 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /tickets/process
+                path: /api/tickets/process
                 json:
                   id: T-102
                   customer_tier: enterprise
-                  subject: Everything from yesterday is gone
-                  body: "All notes my team wrote yesterday have disappeared from every device. We need them back today."
+                  subject: My whole account history is gone
+                  body: "All my orders and saved favourites have disappeared from my account since yesterday. I need my order history back today."
               expect:
                 json:
                   - { pointer: /category, equals: technical }
@@ -239,12 +275,12 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /tickets/process
+                path: /api/tickets/process
                 json:
                   id: T-103
                   customer_tier: pro
                   subject: Cancel and refund NOW
-                  body: "Refund the 480 EUR for my annual plan (INV-18800) immediately or my lawyer will be in touch."
+                  body: "Refund the 480 EUR for order INV-18800 immediately or my lawyer will be in touch."
               expect:
                 json:
                   - { pointer: /category, equals: billing }
@@ -256,7 +292,7 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /tickets/process
+                path: /api/tickets/process
                 json:
                   id: T-104
                   customer_tier: free
@@ -271,12 +307,12 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /tickets/process
+                path: /api/tickets/process
                 json:
                   id: T-105
                   customer_tier: free
-                  subject: Love the new dark mode
-                  body: "The new dark mode is beautiful! It would be even better if I could add colored tags to notes."
+                  subject: Love the new search
+                  body: "The new search on your website is great, it found exactly what I meant! It would be even better with a filter on price."
               expect:
                 json:
                   - { pointer: /category, equals: feedback }
@@ -288,7 +324,7 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /tickets/process
+                path: /api/tickets/process
                 json:
                   id: T-106
                   customer_tier: pro
@@ -309,7 +345,7 @@ sections:
         optional: true
         estimated_minutes: 4
         config:
-          prompt: Which part of your pipeline would you make more autonomous, which part should never be, and why?
+          prompt: Which part of the support pipeline of {{theme.data.site.name}} would you make more autonomous, which part should never be, and why?
         validation:
           min_words: 30
           required_concepts:
@@ -321,4 +357,6 @@ sections:
         depends_on: [pipeline]
         body: |
           You combined model steps, code rules, evaluation and human review into one traceable
-          system. That's how most reliable AI products are built.
+          system. That's how most reliable AI products are built — and it completes the track:
+          {{theme.data.site.name}} went from an empty folder to a website with search, an
+          assistant, an MCP server, agents and workflows. Well done.

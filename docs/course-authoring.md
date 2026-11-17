@@ -14,11 +14,13 @@ description: |
   Markdown shown on the course page.
 category: Infrastructure
 difficulty: beginner         # beginner | intermediate | advanced
-order: 20                    # position within the difficulty level in the catalog
+order: 20                    # position in the course track
 estimated_minutes: 30
 help: |                      # coaching notes added to every step's help prompt
   The learner writes their first Dockerfile. Guide, don't write it for them.
 objectives: [Explain images vs containers]
+glossary:                    # key terms for the learner's sidebar; terms stay English
+  - { term: Image, definition: A read-only template a container starts from. }
 prerequisites:
   - title: Connect your AI agent over MCP
     course: mcp-first-connection
@@ -40,7 +42,8 @@ Common fields: `id`, `type`, `title`, `description`, `body` (markdown), `config`
 learners), `validation` (private), `depends_on`, `optional`, `completion: manual`,
 `estimated_minutes`, `extension` (only for generic types), `help` (coaching notes).
 
-- **Catalog order**: courses are listed by difficulty, then `order`, then title.
+- **Catalog order**: courses form one track, listed by `order` (then difficulty and title). A
+  course gates its practical section with a `prerequisite` step on the previous course.
 - **Help**: every step has a *Help* button with a prompt learners paste into their agent. It
   asks the agent to coach without solving and appends the step's `help` and the course's
   `help`. Write them as guidance for a tutor: likely mistakes, what to inspect, what not to
@@ -54,7 +57,8 @@ learners), `validation` (private), `depends_on`, `optional`, `completion: manual
 | Type | `config` | `validation` |
 | --- | --- | --- |
 | `explanation` | — (needs `body`) | — |
-| `interactive_content` | `panels: [{title, body}]` | — |
+| `diagram` | `nodes: [{id, label, detail?, row?, col?, kind?}]`, `edges: [{from, to, label?, dashed?}]`, `caption?` | — |
+| `diagram_exercise` | `prompt`, `mode: slots\|order`, slots: `nodes` (with `slot: true`) + `edges`; both: `chips: [{id, label}]` | `slots: {node: chip}` or `order: [chip…]` |
 | `video` | `url` (https), `duration_seconds?`, `transcript?` | — |
 | `code_example` | `snippets: [{language, code, filename?, caption?}]` | — |
 | `quiz` | `questions: [{id, prompt, multiple?, explanation?, options: [{id, text, correct?, explanation?}]}]`, `pass_score?` | — |
@@ -70,6 +74,7 @@ learners), `validation` (private), `depends_on`, `optional`, `completion: manual
 | `external_task` | `instructions?` | needs `extension` or `completion: manual` |
 | `conditional` | `when: {step, status \| score_below \| score_at_least}` | — |
 | `prerequisite` | `courses: [ids]` | — |
+| `project_setup` | — (learner picks a theme and stack; completes once chosen) | — |
 | `manual_completion` / `automatic_completion` | `instructions?` | — |
 | `reusable_section` | `section: <shared_sections key>` | — |
 | `service_check` | `default_url?` | scenario of hidden HTTP test cases (below) |
@@ -121,6 +126,40 @@ from `/api/v1/course-assets/`).
 Design cases so that only a working implementation passes: fictional data a model cannot
 know, paraphrases without shared keywords, unanswerable questions and prompt injections.
 Learner services must allow CORS from the platform origin; the step page explains how.
+
+## Themes: one course, every learner's own website
+
+Learners build one website throughout the track. Write course text once and refer to the
+learner's theme with `{{theme.<path>}}` placeholders, anywhere in text, `config` or
+`validation`:
+
+| Placeholder | Comes from `courses/themes/<id>.yaml` |
+| --- | --- |
+| `{{theme.name}}`, `{{theme.item}}`, `{{theme.items}}`, `{{theme.site_kind}}`, … | `name` and localized `vars` |
+| `{{theme.data.site.name}}`, `{{theme.data.items.0.id}}` | `data`: the public seed data learners load (via MCP `get_project`) |
+| `{{theme.probes.search.dutch.query}}` | `probes`: hidden test inputs and expectations that fit the data |
+
+A string that is *only* a placeholder keeps the value's type, so
+`includes_all: "{{theme.probes.catalog.category_ids}}"` becomes a list and
+`min_items: "{{theme.probes.catalog.count}}"` a number.
+
+Only add probes where a check depends on data the learner stores (catalog, search, RAG); checks
+whose input travels in the request stay generic. The non-selectable `neutral` theme defines the
+wording used before a project is chosen **and the shape of `data` and `probes`**: every theme
+must define the same keys with the same kinds of values. `pnpm courses:check` renders every
+course for every theme and language and fails on undefined placeholders or invalid configs.
+Steps containing placeholders are validated on those rendered copies.
+
+## Translations
+
+Courses are authored in English. A Dutch overlay lives in `courses/locales/nl/<course id>.yaml`
+and mirrors the course by section and step id. It may only replace **text**: strings replace
+strings, objects merge by key, arrays of objects match by `id` (or by position, so use `{}` for
+items you leave unchanged), and lists of plain strings such as `any_of` keyword lists are
+replaced as a whole — include the English keywords too. Glossary entries are translated by
+term (`glossary: { Embedding: … }`); terms themselves stay English. Keep developer terms such
+as embedding, prompt and endpoint in English in the Dutch text, and quote flow-style values
+that contain commas or `?`. Untranslated fields fall back to English.
 
 ## Reusable sections
 

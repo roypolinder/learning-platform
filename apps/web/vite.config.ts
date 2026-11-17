@@ -13,8 +13,9 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			// Built as a static SPA and served by the Rust API in production.
-			adapter: adapter({ fallback: 'index.html' })
+			// Built as a static SPA and served by the Rust API in production. The landing pages
+			// are prerendered to index.html and nl/index.html; every other route uses 200.html.
+			adapter: adapter({ fallback: '200.html' })
 		})
 	],
 	server: {

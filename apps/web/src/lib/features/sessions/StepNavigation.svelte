@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import StepStatusIcon from '#lib/components/ui/StepStatusIcon.svelte';
 	import type { LearningSession } from './learning-session.svelte.ts';
 
 	let { session }: { session: LearningSession } = $props();
 </script>
 
-<nav aria-label="Course steps" class="flex flex-col gap-5">
+<nav aria-label={t('learn.steps_nav')} class="flex flex-col gap-5">
 	{#each session.detail?.course.sections ?? [] as section, sectionIndex (section.id)}
 		<div>
 			<p class="mb-1.5 px-2 text-[11px] font-medium tracking-wide text-fg-subtle uppercase">
@@ -25,7 +26,7 @@
 						>
 							<StepStatusIcon {status} current={session.selectedStepId === step.id} />
 							<span class="min-w-0 flex-1 truncate" class:line-through={status === 'skipped'}>{step.title}</span>
-							{#if step.optional}<span class="text-[11px] text-fg-subtle">optional</span>{/if}
+							{#if step.optional}<span class="text-[11px] text-fg-subtle">{t('common.optional')}</span>{/if}
 						</button>
 					</li>
 				{/each}

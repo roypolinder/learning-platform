@@ -5,8 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
 use lp_core::{
-    Capability, CheckResult, CompletionStrategy, Extension, ExtensionError, ExtensionManifest,
-    StepCategory, StepContext, StepTypeSpec, Submission, ValidationOutcome, parse_config,
+    Capability, CheckResult, CompletionStrategy, Diagram, DiagramEdge, DiagramNode, Extension,
+    ExtensionError, ExtensionManifest, SlotRule, StepCategory, StepContext, StepTypeSpec,
+    Submission, ValidationOutcome, parse_config,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -14,6 +15,7 @@ use serde_json::{Value, json};
 use crate::support::{collect_issues, parse_submission, unsupported_step_type};
 
 pub const ID: &str = "quiz";
+const DIAGRAM_EXERCISE: &str = "diagram_exercise";
 
 pub struct QuizExtension {
     manifest: ExtensionManifest,
@@ -48,6 +50,10 @@ impl QuizExtension {
                         "A written answer checked against rubric rules.",
                     ),
                     assessment("interactive_exercise", "Fill in the blanks of a template."),
+                    assessment(
+                        DIAGRAM_EXERCISE,
+                        "Drag labels into the empty boxes of a diagram, or put steps in order.",
+                    ),
                 ],
                 event_kinds: Vec::new(),
             },
@@ -145,6 +151,138 @@ struct ExerciseRules {
     answers: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     case_sensitive: bool,
+}
+
+/// `slots`: chips go into the empty nodes of a diagram. `order`: chips are put in sequence.
+#[derive(Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum ExerciseMode {
+    #[default]
+    Slots,
+    Order,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DiagramExerciseConfig {
+    #[allow(dead_code)]
+    prompt: String,
+    #[serde(default)]
+    mode: ExerciseMode,
+    #[serde(default)]
+    nodes: Vec<DiagramNode>,
+    #[serde(default)]
+    edges: Vec<DiagramEdge>,
+    #[serde(default)]
+    #[allow(dead_code)]
+    caption: Option<String>,
+    /// Labels the learner places. In `slots` mode extra chips act as distractors.
+    chips: Vec<Chip>,
+    #[serde(default = "full_score")]
+    pass_score: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Chip {
+    id: String,
+    #[allow(dead_code)]
+    label: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DiagramExerciseRules {
+    /// `slots` mode: slot node id → chip id.
+    #[serde(default)]
+    slots: BTreeMap<String, String>,
+    /// `order` mode: chip ids in the correct order.
+    #[serde(default)]
+    order: Vec<String>,
+}
+
+impl DiagramExerciseConfig {
+    fn diagram(&self) -> Diagram {
+        Diagram {
+            nodes: self.nodes.clone(),
+            edges: self.edges.clone(),
+            caption: None,
+        }
+    }
+
+    fn check(&self, rules: &DiagramExerciseRules) -> Result<(), Vec<String>> {
+        let mut issues = Vec::new();
+        let mut chip_ids = BTreeSet::new();
+        for chip in &self.chips {
+            if chip.id.is_empty() || !chip_ids.insert(chip.id.as_str()) {
+                issues.push(format!(
+                    "chip ids must be unique and non-empty (`{}`)",
+                    chip.id
+                ));
+            }
+        }
+        if !(0.0..=1.0).contains(&self.pass_score) {
+            issues.push("config.pass_score must be between 0 and 1".into());
+        }
+        match self.mode {
+            ExerciseMode::Slots => {
+                let diagram = self.diagram();
+                issues.extend(diagram.check(SlotRule::Required));
+                let slots: BTreeSet<&str> = diagram.slot_ids().collect();
+                for slot in &slots {
+                    match rules.slots.get(*slot) {
+                        Some(chip) if chip_ids.contains(chip.as_str()) => {}
+                        Some(chip) => issues.push(format!(
+                            "validation.slots.{slot} refers to unknown chip `{chip}`"
+                        )),
+                        None => issues.push(format!("validation.slots.{slot} is missing")),
+                    }
+                }
+                for key in rules
+                    .slots
+                    .keys()
+                    .filter(|key| !slots.contains(key.as_str()))
+                {
+                    issues.push(format!("validation.slots.{key} is not a slot node"));
+                }
+                if !rules.order.is_empty() {
+                    issues.push("validation.order is only used in `order` mode".into());
+                }
+            }
+            ExerciseMode::Order => {
+                if !self.nodes.is_empty() || !self.edges.is_empty() {
+                    issues.push("`order` exercises take chips only, no nodes or edges".into());
+                }
+                if self.chips.len() < 2 {
+                    issues.push("`order` exercises need at least two chips".into());
+                }
+                let ordered: BTreeSet<&str> = rules.order.iter().map(String::as_str).collect();
+                if ordered != chip_ids || rules.order.len() != self.chips.len() {
+                    issues.push("validation.order must list every chip exactly once".into());
+                }
+                if !rules.slots.is_empty() {
+                    issues.push("validation.slots is only used in `slots` mode".into());
+                }
+            }
+        }
+        if issues.is_empty() {
+            Ok(())
+        } else {
+            Err(issues)
+        }
+    }
+}
+
+/// Stable shuffle so the authored order (often the answer) is not shown as-is.
+fn shuffle_chips(config: &mut Value) {
+    fn fnv(text: &str) -> u64 {
+        text.bytes().fold(0xcbf2_9ce4_8422_2325, |hash, byte| {
+            (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3)
+        })
+    }
+    if let Some(chips) = config.get_mut("chips").and_then(Value::as_array_mut) {
+        chips.sort_by_key(|chip| fnv(chip.get("id").and_then(Value::as_str).unwrap_or_default()));
+    }
 }
 
 fn full_score() -> f64 {
@@ -261,6 +399,11 @@ impl Extension for QuizExtension {
                     Err(issues)
                 }
             }
+            DIAGRAM_EXERCISE => {
+                let exercise = parse_config::<DiagramExerciseConfig>("config", config)?;
+                let rules = parse_config::<DiagramExerciseRules>("validation", validation)?;
+                exercise.check(&rules)
+            }
             other => Err(unsupported_step_type(ID, other)),
         }
     }
@@ -285,6 +428,7 @@ impl Extension for QuizExtension {
                 }
             }
             "multiple_choice" => strip(&mut public),
+            DIAGRAM_EXERCISE => shuffle_chips(&mut public),
             _ => {}
         }
         public
@@ -318,6 +462,14 @@ impl Extension for QuizExtension {
                     "type": "object",
                     "additionalProperties": { "type": "string" }
                 }}
+            }),
+            DIAGRAM_EXERCISE => json!({
+                "type": "object",
+                "description": "`slots` mode: slot node id -> chip id. `order` mode: chip ids in order.",
+                "properties": {
+                    "slots": { "type": "object", "additionalProperties": { "type": "string" } },
+                    "order": { "type": "array", "items": { "type": "string" } }
+                }
             }),
             _ => return None,
         };
@@ -375,9 +527,74 @@ impl Extension for QuizExtension {
                 let blanks: Blanks = parse_submission(&submission.payload)?;
                 Ok(grade_exercise(&exercise, &rules, &blanks.blanks))
             }
+            DIAGRAM_EXERCISE => {
+                #[derive(Deserialize)]
+                struct Placement {
+                    #[serde(default)]
+                    slots: BTreeMap<String, String>,
+                    #[serde(default)]
+                    order: Vec<String>,
+                }
+                let exercise = parse_config::<DiagramExerciseConfig>("config", ctx.config)
+                    .map_err(invalid_config)?;
+                let rules = parse_config::<DiagramExerciseRules>("validation", ctx.validation)
+                    .map_err(invalid_config)?;
+                let placement: Placement = parse_submission(&submission.payload)?;
+                Ok(grade_diagram(
+                    &exercise,
+                    &rules,
+                    &placement.slots,
+                    &placement.order,
+                ))
+            }
             other => Err(ExtensionError::Unsupported(format!("`{other}` steps"))),
         }
     }
+}
+
+/// One check per slot (or position), so the learner sees exactly which boxes are wrong.
+fn grade_diagram(
+    exercise: &DiagramExerciseConfig,
+    rules: &DiagramExerciseRules,
+    slots: &BTreeMap<String, String>,
+    order: &[String],
+) -> ValidationOutcome {
+    let checks: Vec<CheckResult> = match exercise.mode {
+        ExerciseMode::Slots => exercise
+            .diagram()
+            .slot_ids()
+            .map(|slot| {
+                let correct = rules
+                    .slots
+                    .get(slot)
+                    .is_some_and(|expected| slots.get(slot).is_some_and(|given| given == expected));
+                CheckResult::new(slot, format!("Box `{slot}`"), correct)
+            })
+            .collect(),
+        ExerciseMode::Order => rules
+            .order
+            .iter()
+            .enumerate()
+            .map(|(index, expected)| {
+                let correct = order.get(index) == Some(expected);
+                CheckResult::new(
+                    (index + 1).to_string(),
+                    format!("Position {}", index + 1),
+                    correct,
+                )
+            })
+            .collect(),
+    };
+    let correct = checks.iter().filter(|check| check.passed).count();
+    let score = correct as f64 / checks.len().max(1) as f64;
+    let summary = format!("{correct} of {} in the right place", checks.len());
+    let outcome = if score + f64::EPSILON >= exercise.pass_score {
+        // The learner's own (correct) placement, so a finished exercise can be shown again.
+        ValidationOutcome::passed(summary).with_feedback(json!({ "slots": slots, "order": order }))
+    } else {
+        ValidationOutcome::failed(summary)
+    };
+    outcome.with_score(score).with_checks(checks)
 }
 
 fn grade(quiz: &QuizConfig, answers: &BTreeMap<String, Vec<String>>) -> ValidationOutcome {
@@ -625,6 +842,67 @@ mod tests {
             .await
             .unwrap();
         assert!(ok.is_passed());
+    }
+
+    #[tokio::test]
+    async fn grades_diagram_slots_and_order() {
+        let extension = QuizExtension::new();
+        let slots_config = json!({
+            "prompt": "Complete the flow",
+            "nodes": [ { "id": "agent", "label": "Agent" }, { "id": "server", "slot": true } ],
+            "edges": [ { "from": "agent", "to": "server" } ],
+            "chips": [ { "id": "mcp", "label": "MCP server" }, { "id": "db", "label": "Database" } ]
+        });
+        let slots_rules = json!({ "slots": { "server": "mcp" } });
+        extension
+            .validate_config(DIAGRAM_EXERCISE, &slots_config, &slots_rules)
+            .unwrap();
+        let ctx = context(DIAGRAM_EXERCISE, &slots_config, &slots_rules);
+        let right = extension
+            .validate_submission(&ctx, &submission(json!({ "slots": { "server": "mcp" } })))
+            .await
+            .unwrap();
+        assert!(right.is_passed());
+        let wrong = extension
+            .validate_submission(&ctx, &submission(json!({ "slots": { "server": "db" } })))
+            .await
+            .unwrap();
+        assert!(!wrong.is_passed());
+        assert!(!wrong.checks[0].passed);
+
+        let order_config = json!({
+            "prompt": "Order the RAG steps", "mode": "order",
+            "chips": [ { "id": "embed", "label": "Embed" }, { "id": "retrieve", "label": "Retrieve" }, { "id": "answer", "label": "Answer" } ]
+        });
+        let order_rules = json!({ "order": ["embed", "retrieve", "answer"] });
+        extension
+            .validate_config(DIAGRAM_EXERCISE, &order_config, &order_rules)
+            .unwrap();
+        let ctx = context(DIAGRAM_EXERCISE, &order_config, &order_rules);
+        let outcome = extension
+            .validate_submission(
+                &ctx,
+                &submission(json!({ "order": ["embed", "answer", "retrieve"] })),
+            )
+            .await
+            .unwrap();
+        assert_eq!(outcome.score, Some(1.0 / 3.0));
+    }
+
+    #[test]
+    fn diagram_exercise_rules_must_cover_every_slot() {
+        let config = json!({
+            "prompt": "?", "nodes": [ { "id": "a", "slot": true }, { "id": "b", "slot": true } ],
+            "chips": [ { "id": "x", "label": "X" } ]
+        });
+        let issues = QuizExtension::new()
+            .validate_config(DIAGRAM_EXERCISE, &config, &json!({ "slots": { "a": "x" } }))
+            .unwrap_err();
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.contains("slots.b is missing"))
+        );
     }
 
     #[tokio::test]

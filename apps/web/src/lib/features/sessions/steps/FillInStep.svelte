@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import type { CourseStep, StepProgress } from '#lib/types/api.ts';
@@ -39,10 +40,10 @@
 	{#if progress?.outcome}<OutcomePanel outcome={progress.outcome} />{/if}
 	<div class="flex justify-end">
 		{#if completed}
-			<Button onclick={() => session.advance(step.id)}>Next step <Icon name="arrow-right" size={14} /></Button>
+			<Button onclick={() => session.advance(step.id)}>{t('common.next_step')} <Icon name="arrow-right" size={14} /></Button>
 		{:else}
 			<Button variant="primary" disabled={!filled} loading={session.pending} onclick={() => session.submit(step.id, { blanks })}>
-				Check
+				{t('fill_in.check')}
 			</Button>
 		{/if}
 	</div>

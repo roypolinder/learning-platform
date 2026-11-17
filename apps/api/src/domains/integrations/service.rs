@@ -61,14 +61,15 @@ pub async fn create_mcp_connection(
     })
 }
 
-/// `.vscode/mcp.json` entry. It carries no credentials: the client discovers the OAuth
-/// endpoints from the server's 401 challenge.
+/// Project-root `.mcp.json` entry. It carries no credentials: the client discovers the
+/// OAuth endpoints from the server's 401 challenge.
 pub fn mcp_config(endpoint: &str) -> Value {
     json!({
-        "servers": {
+        "mcpServers": {
             "learning-platform": {
                 "type": "http",
-                "url": endpoint
+                "url": endpoint,
+                "tools": ["*"]
             }
         }
     })

@@ -11,16 +11,24 @@ mod compiler;
 pub mod course;
 pub mod definition;
 mod error;
+pub mod localization;
+pub mod personalize;
 pub mod registry;
 pub mod runtime;
+pub mod theme;
 pub mod view;
 
-pub use catalog::{CatalogError, load_directory, parse_definition, render_definition};
+pub use catalog::{
+    CatalogError, check_renders, load_directory, parse_definition, render_definition,
+};
 pub use course::{Course, CourseStep, SectionOutline};
-pub use definition::CourseDefinition;
+pub use definition::{CourseDefinition, GlossaryEntry};
 pub use error::{CourseIssue, CourseValidationError, EngineError};
+pub use localization::Locale;
+pub use personalize::Audience;
 pub use registry::{ExtensionRegistry, RegistryError, StepTypeEntry};
 pub use runtime::{
     Advance, CourseEngine, EngineContext, Progress, SessionIdentity, StepState, StepTransition,
     TransitionReason,
 };
+pub use theme::{Theme, ThemeCatalog, ThemeSummary, load_themes};

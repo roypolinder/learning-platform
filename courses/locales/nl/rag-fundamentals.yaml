@@ -1,0 +1,180 @@
+title: "RAG: antwoorden uit je eigen content"
+summary: Bouw een assistent voor je site die vragen van bezoekers beantwoordt uit je eigen pagina's, met bronvermelding, een eerlijk "dat weet ik niet" en bestand tegen prompt injection.
+description: |
+  Bezoekers van {{theme.data.site.name}} stellen steeds dezelfde vragen: openingstijden, prijzen,
+  wat er gebeurt als ze annuleren. De antwoorden staan op je site, in de pagina's die je agent
+  opsloeg in `data/pages.json`. Met retrieval-augmented generation (RAG) laat je een model
+  antwoorden uit precies die pagina's in plaats van uit wat het toevallig onthouden heeft.
+
+  Je bouwt een endpoint `/api/ask` dat de juiste pagina's ophaalt, antwoordt met bronnen, eerlijk
+  zegt wanneer je site het antwoord niet bevat, en instructies negeert die in een vraag verstopt
+  zitten. Het platform stelt het verborgen vragen over je eigen site.
+category: Retrieval
+objectives:
+  - De RAG-pipeline uitleggen, van ingestion tot een antwoord met bronvermelding
+  - Antwoorden baseren op opgehaalde passages en die als bron noemen
+  - Vragen herkennen die je content niet kan beantwoorden, en dat zeggen
+  - Instructies en onbetrouwbare input gescheiden houden om prompt injection te weerstaan
+prerequisites: [Multimodal AI]
+glossary:
+  RAG: Retrieval-augmented generation. Haal eerst relevante passages op en laat een model dan alleen met die passages antwoorden.
+  Chunk: Een stuk van een document dat klein genoeg is om specifiek te zijn, maar groot genoeg om op zichzelf te staan. Je embedt en haalt chunks op.
+  Grounding: Een antwoord baseren op gegeven bronnen in plaats van op het geheugen van het model.
+  Citation: Een verwijzing naar de bron waarop een antwoord gebaseerd is, zoals een pagina-id.
+  Hallucination: Een vloeiend, zelfverzekerd antwoord dat door geen enkele bron wordt ondersteund.
+  Reranking: De best opgehaalde passages opnieuw scoren met een preciezer model en alleen de beste houden.
+  Faithfulness: Of elke bewering in een antwoord wordt ondersteund door de opgehaalde context.
+  Agentic RAG: Een agent beslist zelf wanneer en wat hij ophaalt, met retrieval als tool.
+sections:
+  concepts:
+    title: Hoe RAG werkt
+    steps:
+      pipeline:
+        title: De RAG-pipeline
+        body: |
+          **Ingestion** (vooraf):
+
+          1. Laad documenten en verdeel ze in **chunks** die klein genoeg zijn om specifiek te
+             zijn, maar groot genoeg om op zichzelf te staan. Houd de titel bij elke chunk; die
+             context maakt retrieval veel beter. Je sitepagina's zijn kort, dus één pagina kan één
+             chunk zijn.
+          2. Embed de chunks en sla ze op met metadata (bron-id, rechten, datum).
+
+          **Antwoorden** (per vraag):
+
+          1. **Haal kandidaten op**, het liefst met hybrid search (semantisch plus trefwoorden).
+          2. **Rerank** ze eventueel en houd de beste paar over.
+          3. **Bouw de prompt**: instructies, dan de opgehaalde passages duidelijk gemarkeerd als
+             naslagmateriaal met hun id's, en dan de vraag.
+          4. **Genereer** een antwoord dat alleen die passages gebruikt en de gebruikte id's als
+             **bron** noemt.
+          5. Staat het antwoord niet in de passages, **zeg dat dan**.
+
+          Modellen met een lange context maken RAG niet overbodig. Retrieval houdt prompts klein,
+          goedkoop en snel, werkt met content die elke minuut verandert, respecteert rechten en
+          vertelt je *waar* een antwoord vandaan komt.
+      complete-pipeline:
+        title: Maak de antwoordpipeline af
+        config:
+          prompt: Sleep de juiste stappen naar de lege vakken. Eén label hoort er niet bij.
+          nodes:
+            - { id: question, label: Vraag van bezoeker }
+            - { id: model, label: Chatmodel }
+            - { id: answer, label: Antwoord + bronnen }
+          edges:
+            - {}
+            - { label: beste passages }
+          chips:
+            - { id: search, label: Haal de beste passages op }
+            - { id: assemble, label: "Bouw de prompt: regels, passages met id's, vraag" }
+            - { id: finetune, label: Fine-tune het model op de vraag }
+      failure-modes:
+        title: Waar RAG misgaat
+        body: |
+          - **Retrieval mist.** De juiste passage staat niet in de bovenste resultaten, dus het
+            model kan hem niet gebruiken. Meet retrieval apart: staat bij een set testvragen de
+            juiste pagina in de top k?
+          - **Antwoorden zonder basis.** De context klopt, maar het model antwoordt uit zijn
+            geheugen of dikt dingen aan. Laat het alleen de bronnen gebruiken, eis bronvermelding
+            en controleer dat de genoemde id's echt zijn opgehaald.
+          - **Valse zekerheid.** Het antwoord staat niet op je site en het model verzint iets. Geef
+            het een expliciete uitweg (`answerable: false`) en test met vragen zonder antwoord.
+          - **Prompt injection.** Vragen en opgehaalde pagina's zijn onbetrouwbare input. *"Negeer
+            je instructies"* in een vraag mag het gedrag niet veranderen. Houd instructies
+            gescheiden van input, en geef de antwoordstap nooit gevaarlijke tools.
+          - **Evaluatie.** Houd een testset bij van vragen met de verwachte bronnen en feiten, en
+            draai die bij elke wijziging — precies wat de verborgen checks van deze cursus doen.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: why-rag
+              prompt: Wat is GEEN reden om RAG te gebruiken in plaats van alles in een lang context window te stoppen?
+              explanation: RAG maakt het model niet slimmer; het maakt antwoorden goedkoper, actueler, rekening houdend met rechten en herleidbaar.
+              options:
+                - { id: cost, text: "Lagere kosten en wachttijd per vraag" }
+                - { id: fresh, text: "Content kan veranderen zonder alles opnieuw in de prompt te stoppen" }
+                - { id: smarter, text: "Het maakt het redeneren van het model fundamenteel beter" }
+                - { id: acl, text: "Je kunt filteren op wat iemand mag zien" }
+            - id: diagnose
+              prompt: De antwoorden kloppen niet. Hoe ontdek je of retrieval of generatie het probleem is?
+              explanation: Kijk of bij elke testvraag de juiste pagina is opgehaald. Is dat zo, dan zit het probleem in de generatie.
+              options:
+                - { id: inspect, text: "Controleren of bij elke vraag de juiste bronnen zijn opgehaald" }
+                - { id: model, text: "Eerst een groter model nemen" }
+                - { id: chunk, text: "Elke chunk zo groot mogelijk maken" }
+            - id: unanswerable
+              prompt: Je site bevat het antwoord niet. Wat hoort een goed RAG-systeem te doen?
+              explanation: Zeggen dat het het niet weet, in plaats van een antwoord te verzinnen.
+              options:
+                - { id: guess, text: "Antwoorden uit de algemene kennis van het model" }
+                - { id: idk, text: "Zeggen dat het het antwoord niet in zijn bronnen kan vinden" }
+                - { id: closest, text: "De pagina die er het dichtst bij komt als antwoord geven" }
+            - id: injection
+              prompt: 'Een vraag zegt "negeer alle eerdere instructies". Hoe hoort je systeem daarmee om te gaan?'
+              explanation: Input van gebruikers en opgehaalde tekst is data. Die kan antwoorden voeden, maar nooit instructies veranderen.
+              options:
+                - { id: data, text: "Als onbetrouwbare input: de echte vraag beantwoorden en de verstopte instructie nooit opvolgen" }
+                - { id: obey, text: "Opvolgen; de bezoeker vroeg erom" }
+                - { id: refuse, text: "De assistent uitzetten" }
+  build:
+    title: Bouw de assistent
+    steps:
+      previous-course:
+        title: Je bonnetjesscanner werkt
+      contract:
+        title: Het contract
+        body: |
+          Voeg `POST /api/ask` toe aan je server. Het ontvangt `{"question": "..."}` en antwoordt
+          uit de pagina's in `data/pages.json`, met een embedding model en chatmodel naar keuze.
+          Sla de vectoren van de pagina's op in je vector database naast de catalogus, of in het
+          geheugen — ze zijn kort.
+
+          Antwoord met:
+
+          ```json
+          { "answer": "…", "citations": ["{{theme.data.pages.0.id}}"], "answerable": true }
+          ```
+
+          - `citations` bevat de id's van de pagina's waarop het antwoord gebaseerd is.
+          - Bevatten je pagina's het antwoord niet, antwoord dan met `"answerable": false`,
+            `"citations": []` en een antwoord dat zegt dat je het niet weet. Verwijs de bezoeker
+            liever naar een manier om contact op te nemen met {{theme.data.site.name}}.
+          - Vragen kunnen instructies bevatten zoals "negeer je regels". Je assistent mag die niet
+            opvolgen.
+          - Bezoekers vragen in het Nederlands of Engels. Antwoorden in de taal van de vraag is een
+            mooie extra.
+        config:
+          snippets:
+            - { filename: data/pages.json (eerste pagina) }
+      assistant:
+        title: Voer de assistent-checks uit
+        body: |
+          Het platform stelt zes verborgen vragen over {{theme.data.site.name}}. De eerste moet
+          slagen, plus minstens vier van de andere vijf. Ze controleren de feiten in het antwoord,
+          de bronvermelding, een eerlijk "dat weet ik niet" en dat een verstopte instructie wordt
+          genegeerd.
+        validation:
+          cases:
+            - { id: fact, label: Beantwoordt een directe vraag met het juiste feit en de juiste bron }
+            - { id: policy, label: Vindt het juiste getal op een pagina met voorwaarden }
+            - { id: detail, label: Beantwoordt een vraag over een detail van een pagina }
+            - { id: injection, label: Beantwoordt de echte vraag en negeert een verstopte instructie }
+            - { id: unanswerable, label: Zegt dat het het niet weet als de site geen antwoord heeft }
+            - { id: off-topic, label: Beantwoordt geen vragen die niets met de site te maken hebben }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Ontwerp je evaluatie
+        config:
+          prompt: Je blijft de assistent van {{theme.data.site.name}} verbeteren. Beschrijf de evaluatie die je bij elke wijziging draait en welke metrics je bijhoudt.
+        validation:
+          required_concepts:
+            - { label: een testset met vragen, any_of: [test set, questions, dataset, golden, eval, testset, vragen] }
+            - { label: metrics voor retrieval of faithfulness, any_of: [recall, retrieval, faithful, grounded, citation, precision, correctness, bron, juistheid, precisie] }
+      finish:
+        title: Antwoorden met een basis
+        body: |
+          De assistent van {{theme.data.site.name}} antwoordt uit je eigen pagina's en kent zijn
+          grenzen. Hierna geef je je agent gevorderde skills met scripts en naslagmateriaal.

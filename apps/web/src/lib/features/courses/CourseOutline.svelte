@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { CourseSection } from '#lib/types/api.ts';
 	import { stepTypeLabel } from '#lib/features/sessions/step-labels.ts';
+	import { t } from '#lib/i18n/index.svelte.ts';
 
 	let { sections }: { sections: CourseSection[] } = $props();
 </script>
@@ -16,7 +17,7 @@
 				{#each section.steps as step (step.id)}
 					<li class="flex items-center gap-3 px-4 py-2 text-[13px]">
 						<span class="min-w-0 flex-1 truncate">{step.title}</span>
-						{#if step.optional}<span class="text-[11px] text-fg-subtle">optional</span>{/if}
+						{#if step.optional}<span class="text-[11px] text-fg-subtle">{t('common.optional')}</span>{/if}
 						<span class="w-28 shrink-0 text-right text-[12px] text-fg-subtle">{stepTypeLabel(step.type)}</span>
 					</li>
 				{/each}

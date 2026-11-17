@@ -1,0 +1,175 @@
+title: Agentic workflows
+summary: Combineer meerdere modelstappen en tools tot een betrouwbare pipeline met routing, evaluatieloops, guardrails en controle door een mens.
+description: |
+  De meeste AI-systemen in productie zijn geen enorme autonome agent. Het zijn **workflows**: een
+  ontworpen reeks modelaanroepen en codestappen die elk één ding goed doen, met controles
+  ertussen en een mens waar het ertoe doet. Ze zijn makkelijker te testen, goedkoper om te
+  draaien en voorspelbaarder.
+
+  Klanten van {{theme.data.site.name}} sturen supporttickets over bestellingen, boekingen,
+  betalingen en hun account. In de laatste cursus van het traject bouw je een ticketpipeline die
+  zijn input bewaakt, classificeert, gegevens eruit haalt, routeert, antwoorden schrijft en
+  zelf controleert, en riskante tickets naar een mens stuurt. Het platform stuurt verborgen
+  tickets, waaronder één die je pipeline probeert over te nemen, en controleert elke beslissing
+  en de trace van de stappen.
+category: AI agents
+objectives:
+  - Kiezen tussen workflowpatronen en autonome agents
+  - Modelstappen ketenen, routeren en parallel uitvoeren met gestructureerde overdrachten
+  - Een evaluatieloop toevoegen die gegenereerde output controleert en verbetert
+  - Guardrails in code, verdediging tegen prompt injection en controle door een mens combineren
+prerequisites: [Knowledge graphs]
+glossary:
+  Workflow: Een ontworpen reeks modelaanroepen en codestappen die elk één taak doen, met controles ertussen.
+  Prompt chaining: De output van de ene modelstap is de input van de volgende.
+  Routing: Een stap bepaalt welke route de input krijgt, bijvoorbeeld een automatisch antwoord of een mens.
+  Parallelization: Onafhankelijke stappen draaien tegelijk, of meerdere runs stemmen over één antwoord.
+  Orchestrator–workers: Een model plant deeltaken en geeft ze door aan andere stappen.
+  Evaluator–optimizer: Eén stap maakt iets, een andere geeft kritiek, en de eerste verbetert het — een beperkt aantal rondes.
+  Structured hand-off: Elke stap geeft JSON terug die tegen een schema is gecontroleerd, zodat de volgende stap erop kan bouwen.
+  Idempotent: Een stap twee keer uitvoeren heeft hetzelfde effect als één keer, dus opnieuw proberen is veilig.
+sections:
+  concepts:
+    title: Workflowpatronen
+    steps:
+      patterns:
+        title: De bouwstenen
+        body: |
+          Een klein aantal patronen dekt de meeste echte systemen:
+
+          | Patroon | Wat het doet | Voorbeeld |
+          | --- | --- | --- |
+          | **Prompt chaining** | De output van een stap voedt de volgende | classificeren → gegevens eruit halen → antwoord schrijven |
+          | **Routing** | Een stap kiest welke route de input krijgt | betaling vs techniek vs mens |
+          | **Parallelization** | Onafhankelijke stappen draaien tegelijk, of meerdere runs stemmen | velden eruit halen terwijl het beleid wordt gecontroleerd |
+          | **Orchestrator–workers** | Een model plant deeltaken en delegeert ze | een onderwerp uitzoeken in meerdere bronnen |
+          | **Evaluator–optimizer** | Eén stap maakt iets, een andere geeft kritiek, herhaal | antwoord schrijven, controleren, verbeteren |
+
+          Principes die ze robuust maken:
+
+          - **Gestructureerde overdracht.** Elke stap geeft JSON terug die tegen een schema is
+            gecontroleerd, zodat de volgende stap en je code erop kunnen vertrouwen.
+          - **Regels in code.** "Terugbetalingen boven €100 gaan naar een mens" is een `if`, geen
+            zin in een prompt. Modellen classificeren en halen gegevens eruit; code beslist.
+          - **Begrensde loops.** Een evaluatieloop krijgt een maximum aantal rondes.
+          - **Bewaak de input.** Controleer op prompt injection, misbruik en verzoeken buiten de
+            opdracht voordat iets op de input handelt.
+          - **Leg alles vast.** Bewaar elke stap met input, output, wachttijd en kosten. Gaat een
+            ticket mis, dan laat de trace zien welke stap faalde.
+
+          Begin met het simpelste ontwerp dat werkt, en voeg alleen autonomie toe waar de route
+          echt niet vooraf bekend is.
+      pipeline-diagram:
+        title: De pipeline die je gaat bouwen
+        config:
+          nodes:
+            - { id: ticket, label: Ticket, detail: "Een bericht van een klant van {{theme.data.site.name}}." }
+            - { id: guard, detail: "Code en/of een model controleert op prompt injection en misbruik **voordat** iets op het ticket handelt." }
+            - { id: classify, detail: "Modelstappen met structured output: categorie, prioriteit, ordernummer, bedrag." }
+            - { id: route, detail: "Gewone code. Bedrijfsregels zoals *terugbetalingen boven 100 EUR gaan naar een mens* zijn een `if`, geen prompt." }
+            - { id: human, label: Controle door mens, detail: "Riskante tickets wachten op een mens." }
+            - { id: draft, detail: "Evaluator–optimizer: één stap schrijft, een andere controleert tegen de regels. Hooguit twee rondes." }
+          edges:
+            - {}
+            - {}
+            - {}
+            - { label: riskant }
+      tradeoffs:
+        title: Workflow of agent?
+        body: |
+          - **Kies een workflow als** de stappen bekend zijn, de uitkomst consistent en
+            controleerbaar moet zijn, kosten en wachttijd tellen, en fouten duur zijn:
+            tickets sorteren, documenten verwerken, rapporten maken.
+          - **Kies een agent als** de route afhangt van wat er ontdekt wordt, taken sterk
+            verschillen en je wat onvoorspelbaarheid kunt hebben: onderzoek, debuggen, open hulp.
+          - **Combineer ze.** Veel gezien in de praktijk: een workflow met één agent-stap
+            (bijvoorbeeld "onderzoek"), of een agent die goed afgebakende workflows als tools
+            aanroept.
+          - **Duurzaamheid.** Lange workflows vallen halverwege om: een timeout, een rate limit, een
+            mens die morgen pas goedkeurt. Bewaar de toestand tussen stappen, maak stappen
+            idempotent en probeer veilig opnieuw.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: pattern
+              prompt: Eén stap schrijft een antwoord en een andere controleert het tegen het beleid en stuurt het zo nodig terug voor een verbetering. Welk patroon is dit?
+              explanation: Maken, kritiek geven, verbeteren is het patroon evaluator–optimizer.
+            - id: rule
+              prompt: Waar hoort "terugbetalingen boven €100 gaan altijd naar een mens" te staan?
+              explanation: Bedrijfsregels horen in code, op basis van waarden die het model eruit haalde, zodat een prompt injection er niet omheen kan praten.
+              options:
+                - { id: code, text: "In code, met het bedrag dat het model eruit haalde" }
+                - { id: prompt, text: "In de prompt die het antwoord schrijft" }
+                - { id: model, text: "Het model per geval laten beslissen" }
+            - id: loop
+              prompt: Waarom beperk je het aantal rondes van schrijven en controleren?
+              explanation: Onbegrensde loops kunnen eeuwig doorgaan en geld kosten. Schaal op naar een mens als de grens bereikt is.
+              options:
+                - { id: bound, text: "Om eindeloze loops en kosten te voorkomen; bij de grens gaat het naar een mens" }
+                - { id: quality, text: "Elke ronde maakt het antwoord slechter" }
+            - id: when
+              prompt: Welke taak past beter bij een vaste workflow dan bij een autonome agent?
+              explanation: Tickets sorteren heeft bekende stappen en vraagt om consistente, controleerbare resultaten.
+              options:
+                - { id: triage, text: "Supporttickets sorteren op categorie en prioriteit" }
+                - { id: research, text: "Een onbekende bug onderzoeken in een grote codebase" }
+  build:
+    title: Bouw de pipeline
+    steps:
+      previous-course:
+        title: Je knowledge graph werkt
+      spec:
+        title: De specificatie van de pipeline
+        body: |
+          Bouw de supportpipeline van {{theme.data.site.name}} met een model naar keuze. Voeg
+          `POST /api/tickets/process` toe aan je server: het ontvangt een ticket en geeft de
+          beslissing en een trace terug.
+
+          **Stappen**, in deze volgorde vastgelegd in `trace`: `guard` → `classify` → `extract` →
+          `route`, en voor tickets die naar `auto_reply` gaan ook `draft` → `review` (herhaal
+          `draft`/`review` hooguit twee keer).
+
+          **Regels:**
+
+          - `category`: `billing`, `technical`, `account` of `feedback`.
+          - `priority`: `urgent` bij verloren data, beveiligingsproblemen of storingen; `low` bij
+            feedback; anders `normal`.
+          - `route`: `human_review` als er een terugbetaling boven 100 EUR wordt gevraagd, de klant
+            dreigt met juridische stappen, er een beveiligingsprobleem is, of het ticket je
+            instructies probeert te veranderen. Anders `auto_reply`.
+          - `extracted`: `order_id` (zoals `INV-12345`) en `amount_eur` als die er zijn, anders
+            `null`.
+          - `draft_reply`: het gecontroleerde antwoord bij `auto_reply`, anders `null`. Antwoorden
+            in de taal van de klant is een mooie extra.
+      pipeline:
+        title: Voer de pipeline-checks uit
+        body: |
+          Het platform stuurt zes verborgen tickets tegelijk. Het eerste moet slagen, plus minstens
+          vier van de andere vijf. Elke check kijkt naar de beslissingen en naar de stappen in de
+          trace.
+        validation:
+          cases:
+            - { id: double-charge, label: Handelt een gewoon betalingsticket van begin tot eind af }
+            - { id: data-loss, label: Markeert verloren data als urgent }
+            - { id: large-refund, label: Stuurt een grote terugbetaling met juridische dreiging naar een mens }
+            - { id: injection, label: Laat een ticket de regels niet veranderen }
+            - { id: feedback, label: Behandelt productfeedback met lage prioriteit en een antwoord }
+            - { id: security, label: Schaalt een mogelijke accountovername op als urgent }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Verdedig je ontwerp
+        config:
+          prompt: Welk deel van de supportpipeline van {{theme.data.site.name}} zou je autonomer maken, welk deel nooit, en waarom?
+        validation:
+          required_concepts:
+            - { label: controle door een mens of guardrails, any_of: [human, review, approve, guard, rule, code, mens, controle, goedkeur, regel] }
+      finish:
+        title: AI op productieniveau
+        body: |
+          Je hebt modelstappen, coderegels, evaluatie en controle door een mens gecombineerd tot één
+          systeem dat je kunt volgen. Zo worden de meeste betrouwbare AI-producten gebouwd — en
+          daarmee is het traject af: {{theme.data.site.name}} ging van een lege map naar een website
+          met zoeken, een assistent, een MCP server, agents en workflows. Goed gedaan!

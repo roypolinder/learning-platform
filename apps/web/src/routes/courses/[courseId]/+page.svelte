@@ -11,6 +11,7 @@
 	import { ApiError } from '#lib/services/api/client.ts';
 	import { coursesApi } from '#lib/services/api/courses.ts';
 	import { sessionsApi } from '#lib/services/api/sessions.ts';
+	import { i18n, t, type MessageKey } from '#lib/i18n/index.svelte.ts';
 	import { auth } from '#lib/state/auth.svelte.ts';
 	import type { CourseDetailResponse } from '#lib/types/api.ts';
 	import { formatDifficulty, formatMinutes, formatRelative } from '#lib/utils/format.ts';
@@ -23,18 +24,13 @@
 	let starting = $state(false);
 	let startError = $state<string | null>(null);
 
-	const extensionLabels: Record<string, string> = {
-		mcp: 'MCP connection to your agent',
-		quiz: 'Knowledge checks',
-		filesystem: 'File checks via your agent',
-		http: 'HTTP endpoint checks',
-		git: 'Git repository checks'
-	};
+	const extensionLabels = new Set(['mcp', 'quiz', 'filesystem', 'http', 'git', 'service']);
+	const extensionLabel = (id: string) => (extensionLabels.has(id) ? t(`extension.${id}` as MessageKey) : id);
 
 	$effect(() => {
 		const id = params.courseId;
-		// Refetch once auth resolves so the learner's session is included.
-		void auth.user;
+		// Refetch once auth resolves (to include the session) and when the language changes.
+		void [auth.user, i18n.locale];
 		coursesApi
 			.get(id)
 			.then((result) => (data = result))
@@ -52,7 +48,7 @@
 			const detail = await sessionsApi.start(params.courseId);
 			await goto(`/learn/${detail.session.id}`);
 		} catch (error) {
-			startError = error instanceof ApiError ? error.message : 'Could not start the course.';
+			startError = error instanceof ApiError ? error.message : t('course.start_error');
 		} finally {
 			starting = false;
 		}
@@ -60,21 +56,32 @@
 
 	let session = $derived(data?.session ?? null);
 	let actionLabel = $derived(
-		!auth.user ? 'Sign in to start' : session?.status === 'active' ? 'Continue course' : session?.status === 'completed' ? 'Review course' : 'Start course'
+		t(
+			!auth.user
+				? 'course.sign_in_to_start'
+				: session?.status === 'active'
+					? 'course.continue'
+					: session?.status === 'completed'
+						? 'course.review'
+						: 'course.start'
+		)
 	);
 </script>
 
-<svelte:head><title>{data?.course.title ?? 'Course'} · Learning Platform</title></svelte:head>
+<svelte:head>
+	<title>{data?.course.title ?? t('courses.title')} · {t('app.name')}</title>
+	{#if data}<meta name="description" content={data.course.summary} />{/if}
+</svelte:head>
 
 <div class="mx-auto max-w-5xl px-6 py-8">
 	<a href="/courses" class="inline-flex items-center gap-1.5 text-[13px] text-fg-muted hover:text-fg">
-		<Icon name="arrow-left" size={14} /> All courses
+		<Icon name="arrow-left" size={14} /> {t('course.back')}
 	</a>
 
 	{#if loadError}
 		<div class="mt-8">
-			<EmptyState title={loadError.status === 404 ? 'Course not found' : 'Could not load this course'} description={loadError.message}>
-				{#snippet actions()}<Button href="/courses">Browse courses</Button>{/snippet}
+			<EmptyState title={t(loadError.status === 404 ? 'course.not_found' : 'course.load_error')} description={loadError.message}>
+				{#snippet actions()}<Button href="/courses">{t('course.browse')}</Button>{/snippet}
 			</EmptyState>
 		</div>
 	{:else if !data}
@@ -89,7 +96,7 @@
 				<div class="mt-4 flex flex-wrap items-center gap-4 text-[13px] text-fg-muted">
 					<span>{formatDifficulty(course.difficulty)}</span>
 					<span class="flex items-center gap-1.5"><Icon name="clock" size={14} />{formatMinutes(course.estimated_minutes)}</span>
-					<span>{course.step_count} steps in {course.section_count} sections</span>
+					<span>{t('course.steps_sections', { steps: course.step_count, sections: course.section_count })}</span>
 					<span class="font-mono text-[12px] text-fg-subtle">v{course.version}</span>
 				</div>
 			</div>
@@ -99,8 +106,8 @@
 				</Button>
 				{#if session}
 					<p class="flex items-center gap-2 text-[12px] text-fg-subtle">
-						{#if session.status === 'completed'}<Badge tone="success">Completed</Badge>{/if}
-						Last opened {formatRelative(session.last_accessed_at)}
+						{#if session.status === 'completed'}<Badge tone="success">{t('common.completed')}</Badge>{/if}
+						{t('course.last_opened', { time: formatRelative(session.last_accessed_at) })}
 					</p>
 				{/if}
 			</div>
@@ -110,12 +117,12 @@
 		<div class="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_260px]">
 			<div class="flex flex-col gap-8">
 				<section>
-					<h2 class="mb-3 text-[13px] font-medium text-fg-muted">About this course</h2>
+					<h2 class="mb-3 text-[13px] font-medium text-fg-muted">{t('course.about')}</h2>
 					<Markdown source={course.description} />
 				</section>
 				{#if course.objectives.length}
 					<section>
-						<h2 class="mb-3 text-[13px] font-medium text-fg-muted">You will be able to</h2>
+						<h2 class="mb-3 text-[13px] font-medium text-fg-muted">{t('course.objectives')}</h2>
 						<ul class="flex flex-col gap-2">
 							{#each course.objectives as objective (objective)}
 								<li class="flex items-start gap-2.5 text-[14px]"><Icon name="check" class="mt-1 text-accent" />{objective}</li>
@@ -124,7 +131,7 @@
 					</section>
 				{/if}
 				<section>
-					<h2 class="mb-3 text-[13px] font-medium text-fg-muted">Course structure</h2>
+					<h2 class="mb-3 text-[13px] font-medium text-fg-muted">{t('course.structure')}</h2>
 					<CourseOutline sections={course.sections} />
 				</section>
 			</div>
@@ -132,7 +139,7 @@
 			<aside class="flex flex-col gap-6 text-[13px]">
 				{#if course.prerequisites.length}
 					<section>
-						<h2 class="mb-2 font-medium text-fg-muted">Before you start</h2>
+						<h2 class="mb-2 font-medium text-fg-muted">{t('course.before')}</h2>
 						<ul class="flex flex-col gap-1.5">
 							{#each course.prerequisites as prerequisite (prerequisite.title)}
 								<li>
@@ -145,13 +152,23 @@
 					</section>
 				{/if}
 				<section>
-					<h2 class="mb-2 font-medium text-fg-muted">How you're assessed</h2>
+					<h2 class="mb-2 font-medium text-fg-muted">{t('course.assessed')}</h2>
 					<ul class="flex flex-col gap-1.5">
 						{#each course.extensions as extension (extension)}
-							<li class="flex items-center gap-2"><span class="size-1 rounded-full bg-fg-subtle"></span>{extensionLabels[extension] ?? extension}</li>
+							<li class="flex items-center gap-2"><span class="size-1 rounded-full bg-fg-subtle"></span>{extensionLabel(extension)}</li>
 						{/each}
 					</ul>
 				</section>
+				{#if course.glossary.length}
+					<section>
+						<h2 class="mb-2 font-medium text-fg-muted">{t('course.key_terms')}</h2>
+						<ul class="flex flex-wrap gap-1.5">
+							{#each course.glossary as entry (entry.term)}
+								<li class="rounded-md border border-line bg-surface px-2 py-0.5 text-[12px]" title={entry.definition}>{entry.term}</li>
+							{/each}
+						</ul>
+					</section>
+				{/if}
 				{#if course.tags.length}
 					<section class="flex flex-wrap gap-1.5">
 						{#each course.tags as tag (tag)}<Badge>{tag}</Badge>{/each}

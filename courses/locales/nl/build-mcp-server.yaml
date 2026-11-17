@@ -1,0 +1,175 @@
+title: Bouw je eigen MCP server
+summary: Stel de catalogus van je site beschikbaar als MCP tools via Streamable HTTP, zodat elke AI agent erin kan zoeken — en laat het platform als client verbinding maken.
+description: |
+  In de tweede cursus koppelde je een agent aan de server van een ander. Nu bouw je er zelf een.
+  Je website heeft al een catalogus-API voor browsers; een MCP server geeft AI agents ook een
+  ingang. Elke agent die MCP spreekt, in elke editor of app, kan dan de {{theme.items}} van
+  {{theme.data.site.name}} doorzoeken zonder dat je een speciale integratie hoeft te bouwen.
+
+  Je gebruikt een officiële MCP SDK in jouw taal om een MCP-endpoint toe te voegen met goed
+  beschreven tools, gestructureerde output en nette foutmeldingen. Het platform maakt als MCP
+  client verbinding, vraagt je tools op en roept ze aan met argumenten die je nog niet gezien
+  hebt.
+category: AI-tooling
+objectives:
+  - Een MCP server met tools bouwen op het transport Streamable HTTP
+  - Tool definitions schrijven met input- en output-schema's en annotations
+  - Tool-fouten teruggeven waar een model iets mee kan
+  - Een remote MCP server goed beveiligen
+prerequisites: [Gevorderde skills]
+glossary:
+  MCP SDK: Een officiële library die het MCP-protocol voor je implementeert. Jij registreert tools en schrijft hun handlers.
+  initialize: Het eerste request van elke MCP-sessie. Client en server wisselen protocolversies en mogelijkheden uit.
+  tools/list: Het request waarmee een client vraagt welke tools een server aanbiedt.
+  tools/call: Het request waarmee een client een tool met argumenten aanroept.
+  outputSchema: Een JSON Schema dat het gestructureerde resultaat van een tool beschrijft, teruggegeven als `structuredContent`.
+  Annotations: Hints over een tool, zoals `readOnlyHint` of `destructiveHint`, waarmee clients bepalen wanneer ze om bevestiging vragen.
+  isError: Markeert een tool result als mislukking die het model kan lezen en waarop het kan reageren, in tegenstelling tot een protocolfout.
+  DNS rebinding: Een aanval waarbij een webpagina een server op je eigen computer bereikt. Het controleren van de header `Origin` blokkeert dat.
+sections:
+  concepts:
+    title: Hoe een MCP server in elkaar zit
+    steps:
+      lifecycle:
+        title: Wat er over de lijn gaat
+        body: |
+          Een MCP server spreekt JSON-RPC 2.0. Met het transport **Streamable HTTP** POST de client
+          elk bericht naar één endpoint (volgens afspraak `/mcp`), en antwoordt de server met
+          gewone JSON of een korte stroom server-sent events.
+
+          1. **initialize**: de client stuurt zijn protocolversie en mogelijkheden; de server
+             antwoordt met de zijne en geeft eventueel een header `Mcp-Session-Id` terug die de
+             client bij elk volgend request meestuurt.
+          2. **notifications/initialized**: de client bevestigt. Nu kan het echte werk beginnen.
+          3. **tools/list**: de client vraagt welke tools er zijn. Elke tool heeft een `name`, een
+             `description`, een `inputSchema` en eventueel een `outputSchema` en `annotations`.
+          4. **tools/call**: de client roept een tool aan met argumenten en krijgt `content` terug
+             (tekst, afbeeldingen, …), eventueel `structuredContent` volgens het output-schema, en
+             `isError` als de tool mislukte.
+
+          Niets hiervan schrijf je met de hand. De officiële SDK's regelen het protocol; jij
+          registreert tools en schrijft hun handlers — die de code achter je catalogus- en
+          zoek-endpoints kunnen hergebruiken.
+      two-doors:
+        title: Eén catalogus, twee ingangen
+        config:
+          nodes:
+            - { id: browser, label: Browsers, detail: "Bezoekers gebruiken je pagina's en de JSON API die je in eerdere cursussen bouwde." }
+            - { id: agents, label: AI agents, detail: "Elke agent die MCP spreekt: in een editor, een chat-app of de automatisering van een ander." }
+            - { id: api, detail: "Je bestaande HTTP-endpoints." }
+            - { id: mcp, detail: "Het nieuwe MCP-endpoint: `search_items` en `get_item`." }
+            - { id: catalog, label: "Catalogus + zoeken", detail: "Dezelfde items en dezelfde zoekcode achter beide ingangen." }
+      design:
+        title: Tools ontwerpen die agents goed gebruiken
+        body: |
+          - **Minder, scherpere tools.** Elke tool definition kost context in elk request. Kies
+            liever een paar tools rond taken van gebruikers (`search_items`) dan één tool per
+            databasetabel of API-endpoint.
+          - **Output-schema's.** Declareer een `outputSchema` en geef bijpassende
+            `structuredContent` terug naast een leesbare tekstversie. Clients kunnen de data dan
+            direct controleren en gebruiken.
+          - **Annotations.** Hints zoals `readOnlyHint`, `destructiveHint` en `idempotentHint`
+            helpen clients bepalen wanneer ze de gebruiker om bevestiging vragen. Het zijn hints,
+            geen beveiliging: de server bepaalt nog steeds wat mag.
+          - **Fouten.** Een tool die mislukt geeft een normaal resultaat terug met `isError: true`
+            en een melding waar het model iets mee kan: *"Geen {{theme.item}} met id x-99. Gebruik
+            search_items om de id te vinden."* Protocolfouten zijn voor kapotte requests, niet voor
+            zakelijke mislukkingen.
+          - **Beveiliging.** Remote servers hebben authenticatie nodig (OAuth voor servers die
+            gebruikers aanroepen), moeten de header `Origin` controleren tegen DNS rebinding en
+            horen alleen op localhost te luisteren als ze alleen lokaal bedoeld zijn.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: first
+              prompt: Welk request moet een client sturen voordat hij tools kan opvragen of aanroepen?
+              explanation: Elke sessie begint met initialize, gevolgd door de notificatie initialized.
+            - id: not-found
+              prompt: get_item wordt aangeroepen met een id die niet bestaat. Wat moet de server teruggeven?
+              explanation: Zakelijke mislukkingen zijn tool results met isError true en een nuttige melding, zodat het model zich kan herstellen.
+              options:
+                - { id: rpc, text: "Een JSON-RPC-protocolfout" }
+                - { id: is-error, text: "Een tool result met isError true en een nuttige melding" }
+                - { id: http, text: "HTTP 404" }
+            - id: annotations
+              prompt: Wat vertelt readOnlyHint true bij een tool aan de client?
+              explanation: Het geeft aan dat de tool niets wijzigt, dus een client mag hem misschien zonder te vragen uitvoeren. De server moet de toegang nog steeds bewaken.
+              options:
+                - { id: safe, text: "De tool wijzigt niets, dus hij is misschien veilig uit te voeren zonder bevestiging" }
+                - { id: cache, text: "Het resultaat mag voor altijd gecachet worden" }
+                - { id: enforce, text: "De server garandeert dat gebruikers geen data kunnen schrijven" }
+            - id: origin
+              prompt: Waarom hoort een HTTP MCP server de header Origin te controleren?
+              explanation: Het blokkeert DNS rebinding-aanvallen waarbij een webpagina met een server op je computer praat.
+              options:
+                - { id: rebinding, text: "Om te voorkomen dat websites via DNS rebinding een lokale server bereiken" }
+                - { id: cors, text: "Om responses sneller te maken" }
+                - { id: version, text: "Om de protocolversie af te spreken" }
+  build:
+    title: Bouw de server
+    steps:
+      previous-course:
+        title: Je expense-skill werkt
+      tools:
+        title: De tools
+        body: |
+          Voeg een MCP-endpoint op `/mcp` toe aan de server van {{theme.data.site.name}}, met het
+          transport Streamable HTTP en de officiële MCP SDK voor jouw taal.
+
+          **`search_items`**: input `query` (verplicht, string) en `category` (optioneel, string).
+          Vindt passende {{theme.items}} op naam, beschrijving of betekenis — hergebruik je
+          zoekcode — en alleen in die categorie als er een is opgegeven. Geeft de matches terug met
+          hun id's en namen, of een melding dat er niets gevonden is.
+
+          **`get_item`**: input `item_id` (verplicht, string). Geeft één item terug als tekst en als
+          `structuredContent`, en declareert een `outputSchema` (een object met minstens `id`,
+          `name`, `category` en `price`). Een onbekende id geeft `isError: true` met een melding die
+          voorstelt `search_items` te gebruiken.
+
+          Beide tools hebben duidelijke descriptions nodig (minstens 40 tekens) en de annotation
+          `readOnlyHint: true`.
+      try-it:
+        title: Probeer het met je eigen agent
+        body: |
+          Zet je server naast `learning-platform` in `.mcp.json`:
+
+          ```json
+          {
+            "mcpServers": {
+              "learning-platform": { "type": "http", "url": "http://localhost:8080/mcp", "tools": ["*"] },
+              "{{theme.id}}": { "type": "http", "url": "http://localhost:3000/mcp", "tools": ["*"] }
+            }
+          }
+          ```
+
+          Vraag je agent *"Welke {{theme.items}} van {{theme.data.site.name}} passen bij
+          {{theme.search_example}}?"* en kijk welke tools hij aanroept. Markeer deze stap als klaar
+          wanneer het werkt.
+      server:
+        title: Voer de MCP-checks uit
+        body: |
+          Start je server en vul de basis-URL in, bijvoorbeeld `http://localhost:3000`. Het
+          platform voert de handshake uit, controleert je tool definitions en roept de tools aan
+          met id's en zoekvragen die je nog niet gezien hebt.
+        validation:
+          calls:
+            - { id: get-known, label: get_item geeft het juiste item met structured content }
+            - { id: get-unknown, label: get_item meldt een onbekende id als tool-fout }
+            - { id: search-name, label: search_items vindt een item op naam }
+            - { id: search-category, label: search_items geeft alleen items uit de gevraagde categorie }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Maak hem veilig om te delen
+        config:
+          prompt: Je MCP server wordt via internet door partners gebruikt en krijgt een tool die een boeking of bestelling plaatst. Wat verander je voor de beveiliging?
+        validation:
+          required_concepts:
+            - { label: authenticatie of autorisatie, any_of: [auth, oauth, token, login, permission, authorization, authentication, inlog, rechten, toestemming] }
+      finish:
+        title: Je site spreekt MCP
+        body: |
+          Elke agent die MCP spreekt kan nu in {{theme.data.site.name}} zoeken. Hierna bouw je een
+          eigen agent die met deze tools plant en handelt.

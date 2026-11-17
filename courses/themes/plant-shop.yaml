@@ -1,0 +1,41 @@
+id: plant-shop
+order: 4
+icon: plant
+name: { en: Plant shop, nl: Plantenwinkel }
+tagline: { en: "Houseplants with care advice", nl: "Kamerplanten met verzorgingsadvies" }
+vars:
+  en: { site_kind: plant shop website, business: plant shop, item: plant, items: plants, search_example: a plant that survives when I forget to water it }
+  nl: { site_kind: plantenwinkelwebsite, business: plantenwinkel, item: plant, items: planten, search_example: plant die niet doodgaat als ik vergeet water te geven }
+data:
+  site: { name: Groenhuis, city: Rotterdam }
+  items:
+    - { id: snake-plant, name: Snake plant, category: easy, price: 24, description: "Upright, sword-shaped leaves. Survives weeks without water and copes with low light: almost impossible to kill.", tags: [low maintenance, drought tolerant] }
+    - { id: zz-plant, name: ZZ plant, category: easy, price: 29, description: "Glossy dark green leaves that brighten up dark corners and offices.", tags: [low light] }
+    - { id: monstera, name: Monstera deliciosa, category: large, price: 45, description: "Large plant with big split leaves that grows up to two metres tall.", tags: [statement, tropical] }
+    - { id: fiddle-leaf-fig, name: Fiddle-leaf fig, category: large, price: 55, description: "Tall tree with violin-shaped leaves that needs a bright spot near a window.", tags: [tree, bright light] }
+    - { id: pothos, name: Golden pothos, category: hanging, price: 15, description: "Fast-growing trailing vine with green and yellow leaves.", tags: [trailing, fast growing] }
+    - { id: string-of-pearls, name: String of pearls, category: hanging, price: 18, description: "Succulent whose long strands of round, bead-like leaves hang down from shelves and baskets.", tags: [trailing, succulent] }
+    - { id: calathea, name: Calathea, category: pet-safe, price: 27, description: "Leaves with striking stripes and patterns. Non-toxic for cats and dogs.", tags: [patterned, pets] }
+    - { id: spider-plant, name: Spider plant, category: pet-safe, price: 12, description: "Easy plant with arching leaves that grows baby plants you can repot.", tags: [propagation, pets] }
+    - { id: aloe-vera, name: Aloe vera, category: succulent, price: 14, description: "Succulent with thick leaves full of soothing gel. Needs sun and little water.", tags: [sun, medicinal] }
+    - { id: cactus-mix, name: Cactus trio, category: succulent, price: 19, description: "Three small cacti in a ceramic tray for a sunny windowsill.", tags: [sun, gift] }
+    - { id: orchid, name: Orchid, category: flowering, price: 22, description: "Elegant white flowers that bloom for months. A popular gift.", tags: [flowers, gift] }
+    - { id: olive-tree, name: Olive tree, category: outdoor, price: 65, description: "Mediterranean tree for a balcony or terrace that loves full sun.", tags: [balcony, sun, outdoor] }
+  pages:
+    - { id: about, title: About Groenhuis, body: "Groenhuis is a plant shop at Witte de Withstraat 40 in Rotterdam. We are open Wednesday to Sunday from 10:00 to 18:00." }
+    - { id: care, title: Plant care, body: "Most houseplants need water when the top two centimetres of soil feel dry. Repot young plants every spring in a pot that is one size larger." }
+    - { id: delivery, title: Delivery, body: "Order before 12:00 for same-day delivery in Rotterdam. Elsewhere in the Netherlands delivery takes 2 days. Delivery costs 4.95 euros and is free above 50 euros." }
+    - { id: guarantee, title: Plant guarantee, body: "Every plant comes with a 30-day guarantee. If it dies within 30 days, send us a photo and we replace it for free." }
+probes:
+  catalog: { count: 12, item_id: monstera, item_name: Monstera deliciosa, category: succulent, category_ids: [aloe-vera, cactus-mix], item_price: 45, price_mentions: ["45"] }
+  search:
+    dutch: { query: plant die niet doodgaat als ik vergeet water te geven, expected: snake-plant }
+    paraphrase: { query: something green for my sunny balcony, expected: olive-tree }
+    need: { query: a plant that dangles from a shelf with little round balls, expected: string-of-pearls }
+    situation: { query: a present for my mother that blooms, expected: orchid }
+  vector: { query: plant with patterned leaves that will not harm my dog, category: pet-safe, expected: calathea, excluded: zz-plant }
+  rag:
+    fact: { question: "On which days are you open?", answer_any: [Wednesday, woensdag, Wed], source: about }
+    policy: { question: "How long is the plant guarantee?", answer_any: ["30"], source: guarantee }
+    detail: { question: "Before what time do I need to order for same-day delivery in Rotterdam?", answer_any: ["12:00", "12.00", noon, "12 uur", twaalf], source: delivery }
+    unanswerable: { question: "Do you sell garden furniture?" }

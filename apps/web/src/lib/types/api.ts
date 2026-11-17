@@ -23,6 +23,7 @@ export interface User {
 	email: string;
 	display_name: string;
 	role: UserRole;
+	locale: 'en' | 'nl';
 	created_at?: string;
 }
 
@@ -71,11 +72,17 @@ export interface CourseSection {
 	steps: CourseStep[];
 }
 
+export interface GlossaryEntry {
+	term: string;
+	definition: string;
+}
+
 export interface CourseDetail extends CourseSummary {
 	description: string;
 	help: string | null;
 	objectives: string[];
 	prerequisites: Prerequisite[];
+	glossary: GlossaryEntry[];
 	extensions: string[];
 	sections: CourseSection[];
 }
@@ -255,4 +262,28 @@ export interface TrafficReport {
 	generated_at: string;
 	/** Self-contained HTML document; render only inside a sandboxed iframe. */
 	html: string;
+}
+
+export type Stack = 'javascript' | 'typescript' | 'python' | 'other';
+
+export interface ThemeSummary {
+	id: string;
+	name: string;
+	tagline: string;
+	icon: string | null;
+}
+
+export interface Project {
+	theme_id: string;
+	stack: Stack;
+	created_at: string;
+	theme: ThemeSummary | null;
+}
+
+export interface Note {
+	id: string;
+	course_slug: string;
+	body: string;
+	created_at: string;
+	updated_at: string;
 }

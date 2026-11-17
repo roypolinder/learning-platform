@@ -1,0 +1,145 @@
+title: Je eerste pagina en catalogus-API
+summary: Bouw een kleine webserver die de homepage van je site toont en je catalogus als JSON API aanbiedt.
+description: |
+  Tijd om iets te bouwen dat bezoekers kunnen zien. Je schrijft een kleine webserver voor
+  {{theme.data.site.name}} met een homepage en een **catalogus-API**: de {{theme.items}} uit je
+  seed data als JSON. Elke volgende cursus bouwt op deze server voort: zoeken, chat en agents
+  beginnen allemaal bij de catalogus.
+
+  Het platform controleert je homepage en roept je API aan met requests die het zelf kiest, dus
+  de API moet zich correct gedragen — ook voor dingen die niet bestaan.
+category: Basis van het web
+objectives:
+  - Requests, responses, paden en statuscodes uitleggen
+  - Een HTML-pagina en een JSON API vanuit één kleine server aanbieden
+  - Data filteren met query parameters en 404 antwoorden voor dingen die niet bestaan
+prerequisites: [Leer je agent iets met skills]
+glossary:
+  HTTP: Het protocol van het web. Een client stuurt een request (methode + pad), de server stuurt een response (statuscode + body).
+  Endpoint: Eén pad van een API dat één ding doet, zoals `GET /api/items`.
+  API: Een interface voor programma's in plaats van mensen. Je catalogus-API geeft JSON terug die andere code kan gebruiken.
+  JSON: Een tekstformaat voor data met objecten `{}` en lijsten `[]`. De gemeenschappelijke taal van web-API's.
+  Status code: Een getal in de response dat zegt hoe het ging. `200` OK, `404` niet gevonden, `400` fout request, `500` serverfout.
+  Query parameter: Extra input na het `?` in een URL, zoals `?category=kids`. Vaak gebruikt voor filters.
+  CORS: Cross-Origin Resource Sharing. Headers waarmee je server webpagina's van een andere origin, zoals dit platform, toestaat de responses te lezen.
+  localhost: Je eigen computer. `http://localhost:3000` is een server die op jouw machine draait.
+sections:
+  concepts:
+    title: Hoe een website werkt
+    steps:
+      requests:
+        title: Requests en responses
+        body: |
+          Alles op het web is een gesprek van **requests** en **responses**:
+
+          1. Een client (je browser, een script, het platform) stuurt een request: een
+             **methode** zoals `GET` en een **pad** zoals `/api/items`.
+          2. Je server kijkt naar de methode en het pad, doet zijn werk en stuurt een response:
+             een **statuscode**, wat **headers** en een **body**.
+
+          De body kan **HTML** zijn, die een browser als pagina toont, of **JSON**, die andere code
+          kan lezen. Je site heeft allebei nodig: pagina's voor bezoekers en een **API** voor alles
+          wat je later bouwt.
+
+          De statuscode is net zo belangrijk als de body. Een request voor een {{theme.item}} die
+          niet bestaat hoort `404 Not Found` te krijgen, geen `200` met een lege body — anders kan
+          de code die je API aanroept "niets gevonden" niet onderscheiden van "er ging iets mis".
+      request-flow:
+        title: Wat je gaat bouwen
+        config:
+          nodes:
+            - { id: browser, label: Browser, detail: "Vraagt `/` op en toont de HTML. Ook de plek waar de checks van het platform draaien." }
+            - { id: server, label: Je server, detail: "Kijkt naar de methode en het pad van elk request en stuurt de juiste response. In JavaScript: één bestand `server.js`." }
+            - { id: data, detail: "De seed data die je agent heeft opgeslagen. De server leest die één keer bij het opstarten." }
+            - { id: page, detail: "De homepage met de naam van je site en de catalogus." }
+            - { id: api, detail: "De catalogus-API. Latere cursussen voegen er zoek- en chat-endpoints naast toe." }
+          edges:
+            - { label: request }
+            - { label: leest }
+      check-http:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: not-found
+              prompt: "Een bezoeker vraagt `/api/items/eenhoorn` op en die id bestaat niet. Wat moet je server antwoorden?"
+              explanation: Met 404 weet de aanroeper duidelijk dat het niet bestaat, en een korte JSON-foutmelding legt uit waarom.
+              options:
+                - { id: ok-empty, text: "`200` met een lege body" }
+                - { id: not-found, text: "`404` met een korte JSON-foutmelding" }
+                - { id: error, text: "`500`, want er ging iets mis" }
+            - id: query
+              prompt: "Wat is `category=kids` in `/api/items?category=kids`?"
+              explanation: "Alles na het `?` is de query string: parameters met een naam, vaak gebruikt als filter."
+              options:
+                - { id: path, text: Een deel van het pad }
+                - { id: query, text: Een query parameter }
+                - { id: header, text: Een header }
+            - id: cors
+              prompt: Waarom heeft je server CORS-headers nodig voor de checks van het platform?
+              explanation: De checks draaien in je browser op de pagina van het platform. Browsers laten die pagina je responses alleen lezen als je server die origin toestaat.
+              options:
+                - { id: cors, text: "De checks draaien vanaf de pagina van het platform in je browser, en die mag alleen responses lezen die je server toestaat" }
+                - { id: security, text: Zonder CORS kan iedereen je server hacken }
+                - { id: speed, text: Met CORS zijn responses sneller }
+  build:
+    title: Bouw de server
+    steps:
+      previous-course:
+        title: Je skill staat klaar
+      contract:
+        title: De endpoints
+        body: |
+          Bouw een server op poort `3000` met deze endpoints:
+
+          | Request | Response |
+          | --- | --- |
+          | `GET /` | Een HTML-pagina met de naam **{{theme.data.site.name}}** en een lijst van je {{theme.items}} |
+          | `GET /api/items` | `{ "items": [ … ] }` met elk item uit `data/items.json`, ongewijzigd |
+          | `GET /api/items?category=…` | Alleen de items in die categorie |
+          | `GET /api/items/<id>` | Het item zelf, bijv. `{ "id": "…", "name": "…", … }` |
+          | `GET /api/items/<onbekende id>` | Status `404` met `{ "error": "…" }` |
+
+          Elke response heeft de header `Access-Control-Allow-Origin` nodig, zodat de checks in je
+          browser hem kunnen lezen. Voor openbare data zoals een catalogus is `*` prima.
+      server-skeleton:
+        title: Een begin in JavaScript
+        body: |
+          Node.js heeft een ingebouwde webserver, dus je hebt nog geen libraries nodig. Hier is
+          een skelet: de homepage en de CORS-headers werken, de API maak je zelf. Gebruik je een
+          andere taal? Vraag je agent welk klein webframework past en bouw dezelfde endpoints.
+
+          Start de server met `node --watch server.js` en open http://localhost:3000.
+        config:
+          snippets:
+            - caption: 'Zet `"type": "module"` in package.json, zodat `import` werkt.'
+      home-page:
+        title: Controleer je homepage
+        body: |
+          Start je server en vul het adres in. Je browser vraagt `/` op en het platform controleert
+          dat de pagina de naam van je site toont.
+      catalog-api:
+        title: Controleer je catalogus-API
+        body: |
+          Het platform roept je API aan met requests die het zelf kiest: de hele catalogus, één
+          specifieke {{theme.item}}, een filter op categorie en een id die niet bestaat. Probeer elk
+          soort request eerst zelf met curl of in je browser.
+        validation:
+          cases:
+            - { id: all, label: Geeft elk item uit de catalogus }
+            - { id: one, label: Geeft één item op basis van de id }
+            - { id: unknown, label: Antwoordt 404 voor een id die niet bestaat }
+            - { id: category, label: Filtert de catalogus op categorie }
+  wrap-up:
+    title: Afronden
+    steps:
+      commit:
+        title: Commit je server
+        body: |
+          Commit `server.js` (en `package.json`). Vanaf nu voegt elke cursus endpoints toe aan deze
+          server. Tip: zet er een regel over in je skill `site-conventions`, zodat je agent weet
+          waar de server staat.
+      finish:
+        title: Je site staat online — lokaal
+        body: |
+          {{theme.data.site.name}} heeft een homepage en een catalogus-API. Hierna laat je een
+          taalmodel je code gebruiken via tool calling.

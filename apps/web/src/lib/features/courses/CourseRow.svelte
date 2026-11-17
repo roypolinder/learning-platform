@@ -2,20 +2,39 @@
 	import Badge from '#lib/components/ui/Badge.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import ProgressBar from '#lib/components/ui/ProgressBar.svelte';
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import type { CourseProgress, CourseSummary } from '#lib/types/api.ts';
 	import { formatDifficulty, formatMinutes } from '#lib/utils/format.ts';
 
-	let { course, progress = null }: { course: CourseSummary; progress?: CourseProgress | null } = $props();
+	interface Props {
+		course: CourseSummary;
+		progress?: CourseProgress | null;
+		/** Position in the track, shown as a number. */
+		position?: number;
+	}
+
+	let { course, progress = null, position }: Props = $props();
 </script>
 
 <a href="/courses/{course.id}" class="group flex items-start gap-4 px-4 py-4 transition-colors hover:bg-surface-hover">
+	{#if position}
+		<span
+			class="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full font-mono text-[11px] font-medium {progress?.state === 'completed'
+				? 'bg-success-soft text-success'
+				: progress?.state === 'in_progress'
+					? 'bg-accent-soft text-accent'
+					: 'bg-surface-muted text-fg-muted'}"
+		>
+			{#if progress?.state === 'completed'}<Icon name="check" size={13} strokeWidth={2} />{:else}{String(position).padStart(2, '0')}{/if}
+		</span>
+	{/if}
 	<div class="min-w-0 flex-1">
 		<div class="flex items-center gap-2">
 			<h3 class="text-[14px] font-medium">{course.title}</h3>
 			{#if progress?.state === 'completed'}
-				<Badge tone="success"><Icon name="check" size={11} strokeWidth={2} class="mr-1" />Completed</Badge>
+				<Badge tone="success"><Icon name="check" size={11} strokeWidth={2} class="mr-1" />{t('common.completed')}</Badge>
 			{:else if progress?.state === 'in_progress'}
-				<Badge tone="accent">In progress</Badge>
+				<Badge tone="accent">{t('common.in_progress')}</Badge>
 			{/if}
 		</div>
 		<p class="mt-0.5 line-clamp-2 text-[13px] text-fg-muted">{course.summary}</p>
@@ -23,11 +42,11 @@
 			<span>{course.category}</span>
 			<span>{formatDifficulty(course.difficulty)}</span>
 			<span class="flex items-center gap-1"><Icon name="clock" size={12} />{formatMinutes(course.estimated_minutes)}</span>
-			<span>{course.step_count} steps</span>
+			<span>{t('courses.steps', { count: course.step_count })}</span>
 		</p>
 		{#if progress?.state === 'in_progress'}
 			<div class="mt-2.5 flex max-w-xs items-center gap-2.5">
-				<ProgressBar value={progress.percent} label="{course.title} progress" />
+				<ProgressBar value={progress.percent} label={t('courses.progress_label', { title: course.title })} />
 				<span class="shrink-0 font-mono text-[11px] text-fg-subtle">{progress.percent}%</span>
 			</div>
 		{/if}

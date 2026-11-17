@@ -1,0 +1,267 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: first-web-page
+version: 1.0.0
+title: Your first page and catalog API
+summary: Build a small web server that shows the home page of your site and serves your catalog as a JSON API.
+description: |
+  Time to build something visitors can see. You write a small web server for
+  {{theme.data.site.name}} that serves a home page and a **catalog API**: the
+  {{theme.items}} from your seed data as JSON. Every later course builds on this server: search,
+  chat and agents all start from the catalog.
+
+  The platform checks your home page and calls your API with requests it picks itself, so
+  the API has to behave correctly — including for things that don't exist.
+category: Web foundations
+difficulty: beginner
+order: 4
+estimated_minutes: 50
+tags: [http, api, json, nodejs]
+objectives:
+  - Explain requests, responses, paths and status codes
+  - Serve an HTML page and a JSON API from one small server
+  - Filter data with query parameters and answer 404 for things that don't exist
+prerequisites:
+  - title: Teach your agent with skills
+    course: agent-skill-basics
+glossary:
+  - term: HTTP
+    definition: The protocol of the web. A client sends a request (method + path), the server sends a response (status code + body).
+  - term: Endpoint
+    definition: One path of an API that does one thing, such as `GET /api/items`.
+  - term: API
+    definition: An interface for programs instead of people. Your catalog API returns JSON that other code can use.
+  - term: JSON
+    definition: A text format for data with objects `{}` and lists `[]`. The common language of web APIs.
+  - term: Status code
+    definition: A number in the response that says how it went. `200` OK, `404` not found, `400` bad request, `500` server error.
+  - term: Query parameter
+    definition: Extra input after the `?` in a URL, such as `?category=kids`. Often used for filters.
+  - term: CORS
+    definition: Cross-Origin Resource Sharing. Headers with which your server allows web pages from another origin, like this platform, to read its responses.
+  - term: localhost
+    definition: Your own computer. `http://localhost:3000` is a server running on your machine.
+extensions: [quiz, http, service]
+help: |
+  The learner builds a small HTTP server in their chosen language that serves an HTML home page
+  and a JSON catalog API from data/items.json. Help them reason about routing, status codes,
+  query parameters and CORS. Encourage testing with curl or the browser before running the
+  platform checks. Don't write the endpoints for them.
+
+sections:
+  - id: concepts
+    title: How a website works
+    steps:
+      - id: requests
+        type: explanation
+        title: Requests and responses
+        estimated_minutes: 5
+        body: |
+          Everything on the web is a conversation of **requests** and **responses**:
+
+          1. A client (your browser, a script, the platform) sends a request: a **method** such
+             as `GET`, and a **path** such as `/api/items`.
+          2. Your server looks at the method and path, does its work and sends a response: a
+             **status code**, some **headers** and a **body**.
+
+          The body can be **HTML**, which a browser shows as a page, or **JSON**, which other
+          code can read. Your site needs both: pages for visitors and an **API** for everything
+          you build later.
+
+          The status code matters as much as the body. A request for a {{theme.item}} that
+          doesn't exist should get `404 Not Found`, not a `200` with an empty body — otherwise the
+          code calling your API can't tell "nothing found" from "something went wrong".
+
+      - id: request-flow
+        type: diagram
+        title: What you are building
+        estimated_minutes: 2
+        config:
+          nodes:
+            - { id: browser, label: Browser, kind: person, row: 0, col: 0, detail: "Asks for `/` and shows the HTML. Also the place where the platform's checks run." }
+            - { id: server, label: "Your server", kind: app, row: 0, col: 1, detail: "Looks at the method and path of each request and sends the right response. In JavaScript: one `server.js` file." }
+            - { id: data, label: data/items.json, kind: data, row: 0, col: 2, detail: "The seed data your agent saved. The server reads it once at startup." }
+            - { id: page, label: "GET /  →  HTML", kind: tool, row: 1, col: 0, detail: "The home page with the name of your site and the catalog." }
+            - { id: api, label: "GET /api/items  →  JSON", kind: tool, row: 1, col: 1, detail: "The catalog API. Later courses add search and chat endpoints next to it." }
+          edges:
+            - { from: browser, to: server, label: request }
+            - { from: server, to: data, label: reads }
+            - { from: server, to: page, dashed: true }
+            - { from: server, to: api, dashed: true }
+
+      - id: check-http
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 3
+        config:
+          pass_score: 0.66
+          questions:
+            - id: not-found
+              prompt: "A visitor asks for `/api/items/unicorn` and that id does not exist. What should your server answer?"
+              explanation: 404 tells the caller clearly that the thing doesn't exist, and a small JSON error explains why.
+              options:
+                - { id: ok-empty, text: "`200` with an empty body" }
+                - { id: not-found, text: "`404` with a short JSON error", correct: true }
+                - { id: error, text: "`500`, because something went wrong" }
+            - id: query
+              prompt: "In `/api/items?category=kids`, what is `category=kids`?"
+              explanation: "Everything after the `?` is the query string: named parameters, often used as filters."
+              options:
+                - { id: path, text: Part of the path }
+                - { id: query, text: A query parameter, correct: true }
+                - { id: header, text: A header }
+            - id: cors
+              prompt: Why does your server need CORS headers for the platform's checks?
+              explanation: The checks run in your browser on the platform's page. Browsers only let that page read your responses when your server allows its origin.
+              options:
+                - { id: cors, text: "The checks run from the platform's page in your browser, which may only read responses your server allows", correct: true }
+                - { id: security, text: Without CORS anyone can hack your server }
+                - { id: speed, text: CORS makes responses faster }
+
+  - id: build
+    title: Build the server
+    steps:
+      - id: previous-course
+        type: prerequisite
+        title: Your skill is ready
+        config:
+          courses: [agent-skill-basics]
+
+      - id: contract
+        type: explanation
+        title: The endpoints
+        estimated_minutes: 3
+        body: |
+          Build a server on port `3000` with these endpoints:
+
+          | Request | Response |
+          | --- | --- |
+          | `GET /` | An HTML page with the name **{{theme.data.site.name}}** and a list of your {{theme.items}} |
+          | `GET /api/items` | `{ "items": [ … ] }` with every item from `data/items.json`, unchanged |
+          | `GET /api/items?category=…` | Only the items in that category |
+          | `GET /api/items/<id>` | The item itself, e.g. `{ "id": "…", "name": "…", … }` |
+          | `GET /api/items/<unknown id>` | Status `404` with `{ "error": "…" }` |
+
+          Every response needs the header `Access-Control-Allow-Origin`, so the checks in your
+          browser can read it. For public data like a catalog, `*` is fine.
+
+      - id: server-skeleton
+        type: code_example
+        title: A starting point in JavaScript
+        estimated_minutes: 5
+        body: |
+          Node.js has a web server built in, so you don't need any libraries yet. Here is a
+          skeleton: the home page and the CORS headers work, the API is up to you. Using another
+          language? Ask your agent which small web framework fits, and build the same endpoints.
+
+          Start it with `node --watch server.js` and open http://localhost:3000.
+        config:
+          snippets:
+            - filename: server.js
+              language: javascript
+              code: |
+                import { createServer } from 'node:http';
+                import { readFileSync } from 'node:fs';
+
+                const items = JSON.parse(readFileSync('data/items.json', 'utf8'));
+
+                function send(res, status, body, type = 'application/json') {
+                  res.writeHead(status, {
+                    'Content-Type': type,
+                    // Lets the platform's checks in your browser read the response.
+                    // '*' is fine for public data like a catalog.
+                    'Access-Control-Allow-Origin': '*'
+                  });
+                  res.end(type === 'application/json' ? JSON.stringify(body) : body);
+                }
+
+                createServer((req, res) => {
+                  const url = new URL(req.url, 'http://localhost');
+
+                  if (url.pathname === '/') {
+                    const list = items.map((item) => `<li>${item.name}</li>`).join('');
+                    return send(res, 200, `<h1>{{theme.data.site.name}}</h1><ul>${list}</ul>`, 'text/html');
+                  }
+
+                  // TODO: GET /api/items (with an optional ?category= filter)
+                  // TODO: GET /api/items/<id>, and 404 for ids that don't exist
+
+                  send(res, 404, { error: 'Not found' });
+                }).listen(3000, () => console.log('http://localhost:3000'));
+              caption: 'Add `"type": "module"` to package.json so `import` works.'
+
+      - id: home-page
+        type: http_endpoint_check
+        title: Check your home page
+        estimated_minutes: 2
+        body: |
+          Start your server and enter its address. Your browser requests `/` and the platform
+          checks that the page shows the name of your site.
+        config:
+          path: /
+        validation:
+          expect_status: 200
+          body_contains: ["{{theme.data.site.name}}"]
+
+      - id: catalog-api
+        type: service_check
+        title: Check your catalog API
+        estimated_minutes: 25
+        body: |
+          The platform calls your API with requests it picks itself: the full catalog, one
+          specific {{theme.item}}, a category filter and an id that doesn't exist. Try each kind of
+          request with curl or in your browser first.
+        help: |
+          Common issues: returning the bare array instead of `{ "items": [...] }`; comparing the
+          id in the path including the leading slash; forgetting the 404 status; the category filter
+          returning everything because the query string isn't parsed. Ask which check failed and
+          what the server returned for it.
+        validation:
+          timeout_ms: 5000
+          cases:
+            - id: all
+              label: Lists every item in the catalog
+              request: { path: /api/items }
+              expect:
+                json:
+                  - { pointer: /items, min_items: "{{theme.probes.catalog.count}}", max_items: "{{theme.probes.catalog.count}}" }
+                  - { pointer: /items, field: /id, includes: "{{theme.probes.catalog.item_id}}" }
+            - id: one
+              label: Returns one item by its id
+              request: { path: "/api/items/{{theme.probes.catalog.item_id}}" }
+              expect:
+                json:
+                  - { pointer: /id, equals: "{{theme.probes.catalog.item_id}}" }
+                  - { pointer: /name, equals: "{{theme.probes.catalog.item_name}}" }
+            - id: unknown
+              label: Answers 404 for an id that doesn't exist
+              request: { path: "/api/items/does-not-exist-{{nonce}}" }
+              expect:
+                status: 404
+                json: [{ pointer: /error, min_length: 3 }]
+            - id: category
+              label: Filters the catalog by category
+              request: { path: /api/items, query: { category: "{{theme.probes.catalog.category}}" } }
+              expect:
+                json:
+                  - { pointer: /items, field: /id, includes_all: "{{theme.probes.catalog.category_ids}}" }
+                  - { pointer: /items, field: /category, all_equal: "{{theme.probes.catalog.category}}" }
+
+  - id: wrap-up
+    title: Wrap up
+    steps:
+      - id: commit
+        type: manual_completion
+        title: Commit your server
+        estimated_minutes: 1
+        body: |
+          Commit `server.js` (and `package.json`). From now on, every course adds endpoints to
+          this server. Tip: add a line about it to your `site-conventions` skill, so your agent
+          knows where the server lives.
+
+      - id: finish
+        type: automatic_completion
+        title: Your site is online — locally
+        depends_on: [home-page, catalog-api]
+        body: |
+          {{theme.data.site.name}} has a home page and a catalog API. Next, you let a language
+          model use your code through tool calling.

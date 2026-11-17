@@ -18,6 +18,7 @@ pub struct CurrentUser {
     pub email: String,
     pub display_name: String,
     pub role: String,
+    pub locale: String,
     pub auth_session_id: Uuid,
 }
 

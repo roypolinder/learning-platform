@@ -1,0 +1,41 @@
+id: concert-venue
+order: 10
+icon: music
+name: { en: Concert venue, nl: Concertzaal }
+tagline: { en: "Concerts, tickets and evenings out", nl: "Concerten, tickets en avondjes uit" }
+vars:
+  en: { site_kind: concert venue website, business: concert venue, item: event, items: events, search_example: a concert for small children }
+  nl: { site_kind: concertzaalwebsite, business: concertzaal, item: evenement, items: evenementen, search_example: concert voor kleine kinderen }
+data:
+  site: { name: De Klankkast, city: Nijmegen }
+  items:
+    - { id: jazz-night, name: Late Night Jazz, category: jazz, price: 22, description: "Trio with piano, double bass and drums in an intimate candlelit setting.", tags: [intimate, relaxed] }
+    - { id: indie-rock-band, name: The Paper Lanterns, category: rock, price: 28, description: "Indie rock band with catchy guitar songs from their new album.", tags: [guitar, band] }
+    - { id: symphony-orchestra, name: Symphony Orchestra, category: classical, price: 35, description: "The city orchestra plays symphonies by Beethoven and Dvorak.", tags: [orchestra] }
+    - { id: choir-christmas, name: Christmas Choir Concert, category: classical, price: 18, description: "Sixty voices sing carols and festive songs in December.", tags: [christmas, choir] }
+    - { id: techno-club-night, name: Techno Club Night, category: electronic, price: 20, description: "Dance until sunrise to international DJs playing techno and house.", tags: [dance, club, late] }
+    - { id: silent-disco, name: Silent Disco, category: electronic, price: 15, description: "Party with wireless headphones and three DJ channels to choose from.", tags: [party, headphones] }
+    - { id: singer-songwriter, name: Singer-songwriter evening, category: acoustic, price: 16, description: "Soft acoustic songs by three songwriters with just a guitar and a voice.", tags: [acoustic, soft] }
+    - { id: open-mic, name: Open mic, category: acoustic, price: 5, description: "Sign up and perform your own song, poem or comedy on our small stage.", tags: [perform, beginners] }
+    - { id: kids-concert, name: Family concert, category: family, price: 9, description: "Interactive Sunday afternoon concert for children aged 4 to 10 and their parents.", tags: [children, family] }
+    - { id: hip-hop-showcase, name: Hip-hop showcase, category: hiphop, price: 18, description: "Young local rappers and beatmakers show their best tracks.", tags: [rap, local talent] }
+    - { id: metal-festival, name: Iron Lungs Metal Fest, category: metal, price: 45, description: "One-day festival with six heavy metal bands.", tags: [loud, festival] }
+    - { id: comedy-music, name: Musical comedy night, category: comedy, price: 19, description: "Comedians who turn everyday life into funny songs.", tags: [laughs] }
+  pages:
+    - { id: about, title: About De Klankkast, body: "De Klankkast is a music venue at Molenstraat 12 in Nijmegen. The box office is open Tuesday to Saturday from 12:00 to 18:00, and one hour before every show." }
+    - { id: tickets, title: Tickets, body: "All tickets are e-tickets. You only get a refund if the event is cancelled. If you cannot come, you can resell your ticket through our official resale page for at most the original price." }
+    - { id: accessibility, title: Accessibility, body: "Wheelchair spaces can be booked through the box office. Earplugs are free at the bar." }
+    - { id: rules, title: House rules, body: "Bags larger than A4 are not allowed inside. The cloakroom costs 2 euros per item." }
+probes:
+  catalog: { count: 12, item_id: metal-festival, item_name: Iron Lungs Metal Fest, category: classical, category_ids: [symphony-orchestra, choir-christmas], item_price: 45, price_mentions: ["45"] }
+  search:
+    dutch: { query: concert voor kleine kinderen, expected: kids-concert }
+    paraphrase: { query: dance until the sun comes up to electronic beats, expected: techno-club-night }
+    need: { query: I want to perform a song myself on stage, expected: open-mic }
+    situation: { query: festive carols in December, expected: choir-christmas }
+  vector: { query: a relaxed evening with soft music, category: jazz, expected: jazz-night, excluded: singer-songwriter }
+  rag:
+    fact: { question: "When is the box office open?", answer_any: ["12:00", "12.00", noon, "12 uur", "18:00", "18.00", "6 pm"], source: about }
+    policy: { question: "Can I get a refund if I cannot come?", answer_any: [cancel, annul, resell, doorverk, verkopen], source: tickets }
+    detail: { question: "How much does the cloakroom cost?", answer_any: ["2 euro", "€2", "€ 2", "2,00", "2.00", two euros, twee euro], source: rules }
+    unanswerable: { question: "Is there a car park at the venue?" }

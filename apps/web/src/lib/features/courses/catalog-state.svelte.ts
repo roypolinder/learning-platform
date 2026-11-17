@@ -1,4 +1,5 @@
 import { ApiError } from '#lib/services/api/client.ts';
+import { t } from '#lib/i18n/index.svelte.ts';
 import { coursesApi } from '#lib/services/api/courses.ts';
 import type { CourseProgress, CourseSummary, Difficulty } from '#lib/types/api.ts';
 
@@ -24,6 +25,14 @@ export class CourseCatalog {
 		})
 	);
 
+	/** Position in the track. Unfiltered searches return the whole track in order. */
+	private order = $state<string[]>([]);
+
+	position(courseId: string): number | undefined {
+		const index = this.order.indexOf(courseId);
+		return index < 0 ? undefined : index + 1;
+	}
+
 	count(filter: ProgressFilter): number {
 		if (filter === 'all') return this.courses.length;
 		return this.courses.filter((course) => (this.progress[course.id]?.state ?? 'not_started') === filter).length;
@@ -43,9 +52,10 @@ export class CourseCatalog {
 			this.courses = result.items;
 			this.progress = result.progress ?? {};
 			if (!this.categories.length) this.categories = result.categories;
+			if (!this.query.trim() && !this.category && !this.difficulty) this.order = result.items.map((course) => course.id);
 			this.error = null;
 		} catch (error) {
-			if (id === this.requestId) this.error = error instanceof ApiError ? error.message : 'Could not load courses.';
+			if (id === this.requestId) this.error = error instanceof ApiError ? error.message : t('courses.load_error');
 		} finally {
 			if (id === this.requestId) this.loading = false;
 		}

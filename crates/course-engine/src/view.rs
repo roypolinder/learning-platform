@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::Value;
 
 use crate::course::{Course, CourseStep};
-use crate::definition::{Difficulty, PrerequisiteDefinition};
+use crate::definition::{Difficulty, GlossaryEntry, PrerequisiteDefinition};
 use crate::runtime::CourseEngine;
 
 #[derive(Debug, Clone, Serialize)]
@@ -32,6 +32,7 @@ pub struct CourseDetailView {
     pub help: Option<String>,
     pub objectives: Vec<String>,
     pub prerequisites: Vec<PrerequisiteDefinition>,
+    pub glossary: Vec<GlossaryEntry>,
     pub extensions: Vec<String>,
     pub sections: Vec<SectionView>,
 }
@@ -105,6 +106,7 @@ pub fn course_detail(engine: &CourseEngine, course: &Course) -> CourseDetailView
         help: course.help.clone(),
         objectives: course.objectives.clone(),
         prerequisites: course.prerequisites.clone(),
+        glossary: course.glossary.clone(),
         extensions: course.extensions.clone(),
         sections,
     }

@@ -1,0 +1,41 @@
+id: holiday-homes
+order: 6
+icon: house
+name: { en: Holiday homes, nl: Vakantiehuisjes }
+tagline: { en: "Cottages, cabins and apartments to rent", nl: "Huisjes, chalets en appartementen huren" }
+vars:
+  en: { site_kind: holiday home website, business: holiday park, item: holiday home, items: holiday homes, search_example: a cottage where my dog is welcome }
+  nl: { site_kind: vakantiehuizenwebsite, business: vakantiepark, item: vakantiehuis, items: vakantiehuizen, search_example: huisje waar mijn hond mee mag }
+data:
+  site: { name: Duinrust, city: Domburg }
+  items:
+    - { id: beach-cottage, name: Beach cottage, category: cottage, price: 110, description: "Cosy cottage for 2 people, just 200 metres from the beach.", tags: [beach, couples] }
+    - { id: dog-friendly-cottage, name: Dog-friendly cottage, category: cottage, price: 120, description: "Cottage for 4 people with a fenced garden where dogs are welcome.", tags: [pets, garden] }
+    - { id: dune-chalet-family, name: Family chalet in the dunes, category: chalet, price: 135, description: "Chalet for 6 people next to the playground, with bunk beds for the children.", tags: [family, playground] }
+    - { id: forest-cabin, name: Forest cabin, category: cabin, price: 95, description: "Quiet wooden cabin in the woods with a wood stove and no Wi-Fi. Perfect for a romantic digital detox.", tags: [quiet, romantic, nature] }
+    - { id: tiny-house, name: Tiny house, category: cabin, price: 80, description: "Off-grid tiny house for 2 with solar panels and a view over the polder.", tags: [sustainable, small] }
+    - { id: harbour-apartment, name: Harbour apartment, category: apartment, price: 125, description: "Apartment for 4 with a view over the marina, close to restaurants.", tags: [view, restaurants] }
+    - { id: farm-studio, name: Farm studio, category: apartment, price: 90, description: "Studio on a working farm where children can help feed the goats and chickens.", tags: [farm, kids, animals] }
+    - { id: surf-loft, name: Surf loft, category: apartment, price: 100, description: "Loft next to the surf school with storage for boards and wetsuits.", tags: [surfing, sport] }
+    - { id: villa-pool, name: Villa with private pool, category: villa, price: 380, description: "Luxury villa for 10 people with a heated private swimming pool.", tags: [luxury, pool] }
+    - { id: accessible-bungalow, name: Accessible bungalow, category: bungalow, price: 115, description: "Ground-floor bungalow, fully wheelchair accessible, with a walk-in shower and wide doors.", tags: [accessible, wheelchair] }
+    - { id: lighthouse-suite, name: Lighthouse suite, category: unique, price: 210, description: "Sleep at the top of a restored lighthouse with a 360-degree view of the sea.", tags: [unique, view] }
+    - { id: group-barn, name: Group barn, category: group, price: 450, description: "Converted barn for up to 20 guests with a large kitchen and dining table. Ideal for family reunions.", tags: [groups, large] }
+  pages:
+    - { id: about, title: About Duinrust, body: "Duinrust is a holiday park near Domburg in Zeeland. Reception is at Duinweg 3 and is open every day from 9:00 to 17:00." }
+    - { id: booking, title: Booking, body: "The minimum stay is 2 nights. Check-in is from 15:00 and check-out is before 10:00 on the day you leave." }
+    - { id: cancellation, title: Cancellation, body: "You can cancel for free until 30 days before arrival. Between 30 and 7 days before arrival you pay 50% of the price. Within 7 days there is no refund." }
+    - { id: pets, title: Pets and house rules, body: "Dogs are only allowed in the dog-friendly cottage, with a maximum of 2 dogs. A dog costs 10 euros per night. Parties are not allowed anywhere in the park." }
+probes:
+  catalog: { count: 12, item_id: villa-pool, item_name: Villa with private pool, category: cabin, category_ids: [forest-cabin, tiny-house], item_price: 380, price_mentions: ["380"] }
+  search:
+    dutch: { query: huisje waar mijn hond mee mag, expected: dog-friendly-cottage }
+    paraphrase: { query: a place where my grandmother in a wheelchair can stay comfortably, expected: accessible-bungalow }
+    need: { query: one big house for a family reunion with all the cousins, expected: group-barn }
+    situation: { query: romantic getaway in the woods without internet, expected: forest-cabin }
+  vector: { query: somewhere the kids can see animals, category: apartment, expected: farm-studio, excluded: dune-chalet-family }
+  rag:
+    fact: { question: "What time is check-in?", answer_any: ["15:00", "15.00", "3 pm", "3pm", "15 uur", three, drie], source: booking }
+    policy: { question: "How much does it cost to bring my dog?", answer_any: ["10"], source: pets }
+    detail: { question: "Until when can I cancel for free?", answer_any: ["30"], source: cancellation }
+    unanswerable: { question: "Is there a supermarket within walking distance?" }

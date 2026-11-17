@@ -1,0 +1,163 @@
+title: Knowledge graphs
+summary: Haal met een model entiteiten en relaties uit tekst, voeg dubbelingen samen en beantwoord multi-hop-vragen die gewone retrieval mist.
+description: |
+  Vector search vindt passages die *lijken op* je vraag. Het heeft moeite met vragen die
+  **verbanden** nodig hebben: "In welk kantoor werkt de manager van degene die Lattice
+  onderhoudt?" Geen enkele passage bevat dat antwoord. Een knowledge graph slaat entiteiten en
+  hun relaties expliciet op, zodat je de keten kunt volgen.
+
+  {{theme.data.site.name}} draait niet alleen op code: een klein bureau, Aster Collective, houdt
+  de systemen draaiende. Je haalt met een model een graph uit hun teamnotities, voegt entiteiten
+  samen die verschillend geschreven zijn, en voegt graph-queries en een vraag-endpoint toe aan de
+  backoffice van je site. Het platform controleert entity resolution, relaties, kortste paden en
+  multi-hop-antwoorden.
+category: Retrieval
+objectives:
+  - Een domein modelleren als entiteiten, relaties en eigenschappen met een vast schema
+  - Met een model en structured output triples uit tekst halen, en die controleren
+  - Aliassen en dubbelingen samenvoegen tot vaste (canonieke) entiteiten
+  - Multi-hop-vragen beantwoorden door de graph te doorlopen, los of samen met retrieval
+prerequisites: [AI agents]
+glossary:
+  Knowledge graph: Feiten opgeslagen als entiteiten en de relaties daartussen, zodat je verbanden precies kunt volgen.
+  Triple: "Eén feit: (subject, relatie, object), bijvoorbeeld (Jonas Weber, MAINTAINS, Lattice)."
+  Entity: Een ding in de graph met een type en eigenschappen, zoals een persoon, project of kantoor.
+  Entity resolution: Verschillende vermeldingen van hetzelfde ding samenvoegen, zoals "M. Okafor" en "Mira Okafor", tot één entiteit.
+  Schema: De vaste lijst van entiteittypes en relatietypes die in de graph mogen voorkomen.
+  Multi-hop question: Een vraag die je alleen kunt beantwoorden door meerdere relaties achter elkaar te volgen.
+  Provenance: Waar een feit vandaan komt, zodat je het kunt herleiden en opnieuw kunt extraheren.
+  GraphRAG: RAG die het model verbonden feiten uit een graph als context geeft, niet alleen vergelijkbare passages.
+sections:
+  concepts:
+    title: Graphs en AI
+    steps:
+      graphs:
+        title: Entiteiten, relaties, doorlopen
+        body: |
+          Een knowledge graph slaat feiten op als **triples**: *(subject, relatie, object)*,
+          bijvoorbeeld *(Jonas Weber, MAINTAINS, Lattice)*. Entiteiten hebben een type (Person,
+          Project, System, …) en eigenschappen; relaties hebben een type en een richting.
+
+          Waarom AI-systemen ze gebruiken:
+
+          - **Multi-hop-vragen.** Volg de lijnen: Lattice ← MAINTAINS ← Jonas ← MANAGES ← Mira
+            → BASED_IN → Lisbon. Elke stap is exact, geen gok op basis van gelijkenis.
+          - **Optellen en volledigheid.** "Iedereen die aan Halcyon werkt" is een query, niet de
+            top 5 meest vergelijkbare passages.
+          - **Uitlegbaarheid.** Het pad *is* de uitleg.
+
+          Modellen maken graphs veel goedkoper om te bouwen. In plaats van met de hand geschreven
+          regels leest een model tekst en geeft het triples terug die een **schema volgen dat jij
+          bepaalt**: toegestane entiteittypes en relatietypes. Dat beperkte schema houdt de graph
+          schoon.
+
+          **GraphRAG** combineert beide werelden: vind de relevante entiteiten (vaak met vector
+          search), breid hun omgeving in de graph uit en geef het model die feiten als context.
+      follow-the-path:
+        title: Volg het pad
+        config:
+          prompt: "Lees eventueel de notities in het bouwgedeelte. Welke entiteiten maken het pad af voor: *In welk kantoor werkt de manager van degene die Lattice onderhoudt?*"
+      pitfalls:
+        title: De lastige delen
+        body: |
+          - **Entity resolution.** "Mira Okafor", "M. Okafor" en "Mira" zijn dezelfde persoon;
+            "Halcyon" en "Project Halcyon" zijn hetzelfde project. Zonder samenvoegen zit je graph
+            vol losse dubbelingen. Houd een vaste naam en een lijst aliassen bij.
+          - **Schemadiscipline.** Laat je een model vrij relatietypes verzinnen, dan krijg je
+            WORKS_ON, WORKS_AT, IS_WORKING_ON en CONTRIBUTES_TO voor hetzelfde idee. Geef het een
+            gesloten lijst en weiger al het andere.
+          - **Provenance.** Leg vast uit welke tekst elke triple komt. Klopt een antwoord niet, dan
+            kun je het herleiden naar de extractie, en opnieuw extraheren als de bron verandert.
+          - **Richting.** *(Mira, MANAGES, Jonas)* is iets anders dan *(Jonas, MANAGES, Mira)*. Leg
+            de richting vast in het schema, en zoek in beide richtingen als de vraag dat nodig
+            heeft.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: multi-hop
+              prompt: Welke vraag heeft het meest aan een knowledge graph in plaats van gewone vector search?
+              explanation: Multi-hop-vragen vragen om feiten van verschillende plekken te combineren door relaties te volgen.
+              options:
+                - { id: hop, text: "In welk kantoor werkt de manager van degene die Lattice onderhoudt?" }
+                - { id: def, text: "Wat is Lattice?" }
+                - { id: summary, text: "Vat het onboardingdocument samen." }
+            - id: resolution
+              prompt: Je graph heeft aparte nodes voor "M. Okafor" en "Mira Okafor". Hoe heet dit probleem?
+              explanation: Entity resolution voegt verschillende vermeldingen van hetzelfde echte ding samen.
+              options:
+                - { id: chunking, text: "Chunking" }
+            - id: schema
+              prompt: Waarom geef je het extractiemodel een gesloten lijst relatietypes?
+              explanation: Een gesloten schema voorkomt bijna-dubbele relatietypes en houdt queries betrouwbaar.
+              options:
+                - { id: consistent, text: "Om relaties consistent en doorzoekbaar te houden" }
+                - { id: faster, text: "Om het model sneller te maken" }
+                - { id: cheaper, text: "Graph databases eisen het" }
+            - id: graphrag
+              prompt: Wat voegt GraphRAG toe aan gewone RAG?
+              explanation: Het haalt verbonden feiten uit de graph (omgevingen, paden) als context, niet alleen vergelijkbare passages.
+              options:
+                - { id: neighbours, text: "Context van verbonden entiteiten en relaties" }
+                - { id: images, text: "Afbeeldingen begrijpen" }
+                - { id: training, text: "Het model fine-tunen op de graph" }
+  build:
+    title: Bouw de graph
+    steps:
+      previous-course:
+        title: Je agent werkt
+      source:
+        title: De brontekst, het schema en het contract
+        body: |
+          Haal met een model naar keuze een graph uit de notities van *Aster Collective* hieronder,
+          met dit schema:
+
+          - **Entiteittypes:** `Person`, `Team`, `Project`, `System`, `Office`, `Technology`
+          - **Relatietypes:** `MANAGES`, `LEADS`, `WORKS_ON`, `MAINTAINS`, `USES`, `DEPENDS_ON`,
+            `BASED_IN`, `WRITTEN_IN`
+
+          Sla hem op zoals je wilt en voeg deze endpoints toe aan je server:
+
+          - `GET /api/graph/entity?name=<naam of alias>` geeft
+            `{"name": "<vaste naam>", "type": "Person", "aliases": [...]}` terug, of **404** als de
+            entiteit onbekend is.
+          - `GET /api/graph/neighbors?entity=<naam>&relation=<TYPE>&direction=out|in` (standaard
+            `out`) geeft `{"neighbors": [{"name": "...", "type": "..."}]}` terug.
+          - `GET /api/graph/path?from=<naam>&to=<naam>` geeft het kortste pad terug, ongeacht de
+            richting: `{"path": ["A", "B", "C"]}`.
+          - `POST /api/graph/ask` met `{"question": "..."}` geeft `{"answer": "..."}` terug met
+            behulp van de graph.
+
+          De vaste namen zijn de volledige namen: `Mira Okafor`, `Project Halcyon`, `Lattice`,
+          `Lisbon office`, enzovoort. De notities zijn in het Engels, net als de namen.
+      graph-service:
+        title: Voer de graph-checks uit
+        body: |
+          Het platform controleert aliassen, onbekende entiteiten, relaties in beide richtingen,
+          een kortste pad en twee multi-hop-vragen. De check voor onbekende entiteiten moet slagen,
+          plus minstens 70% van de rest.
+        validation:
+          cases:
+            - { id: unknown, label: Onbekende entiteiten geven 404 in plaats van een gok }
+            - { id: alias-person, label: Herkent “M. Okafor” als Mira Okafor }
+            - { id: alias-project, label: Herkent “Halcyon” als Project Halcyon }
+            - { id: manages, label: "Vindt iedereen die Mira aanstuurt, ook de indirecte vermelding" }
+            - { id: incoming, label: Volgt een relatie in de inkomende richting }
+            - { id: path, label: Vindt het kortste pad van Jonas Weber naar Project Halcyon }
+            - { id: multi-hop-office, label: Beantwoordt een vraag van drie stappen }
+            - { id: multi-hop-people, label: Beantwoordt een vraag waarvoor elke verbonden persoon nodig is }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Graph, vectoren of allebei?
+        config:
+          prompt: Welke vragen aan de assistent van {{theme.data.site.name}} zou je naar een graph sturen, en welke naar vector search?
+        validation:
+          required_concepts:
+            - { label: relaties of multi-hop-vragen, any_of: [relationship, multi-hop, connected, path, who, hops, traverse, relatie, verband, verbonden, pad, wie, stappen] }
+      finish:
+        title: Verbonden kennis
+        body: |
+          Je hebt tekst omgezet in een doorzoekbare graph en die gebruikt voor vragen die verbanden
+          nodig hebben. In de laatste cursus combineer je modelstappen tot betrouwbare workflows.

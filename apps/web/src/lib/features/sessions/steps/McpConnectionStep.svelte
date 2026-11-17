@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import McpSetup from '#lib/features/integrations/McpSetup.svelte';
 	import type { CourseStep, StepProgress } from '#lib/types/api.ts';
@@ -11,7 +12,7 @@
 
 <div class="flex flex-col gap-4">
 	{#if progress?.status === 'completed'}
-		{#if progress.outcome}<OutcomePanel outcome={progress.outcome} title="Connected" />{/if}
+		{#if progress.outcome}<OutcomePanel outcome={progress.outcome} title={t('mcp_step.connected')} />{/if}
 		<AcknowledgeAction {step} {progress} {session} />
 	{:else}
 		<McpSetup compact />
@@ -20,7 +21,7 @@
 				<span class="absolute inline-flex size-full animate-ping rounded-full bg-accent opacity-50"></span>
 				<span class="relative inline-flex size-2 rounded-full bg-accent"></span>
 			</span>
-			Waiting for your agent to call the platform. This page updates automatically.
+			{t('mcp_step.waiting')}
 			<Icon name="terminal" class="ml-auto text-fg-subtle" />
 		</div>
 	{/if}

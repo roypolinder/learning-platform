@@ -1,0 +1,196 @@
+title: Semantic search
+summary: Laat de zoekfunctie van je site begrijpen wat bezoekers bedoelen, niet alleen welke woorden ze typen — en bewijs het met zoekopdrachten die geen woorden met je catalogus delen.
+description: |
+  Zoeken op trefwoorden faalt zodra bezoekers andere woorden gebruiken dan je catalogus. Iemand
+  die op {{theme.data.site.name}} zoekt naar *"{{theme.search_example}}"* gebruikt misschien geen
+  enkel woord uit de beschrijving van wat hij zoekt. Embeddings veranderen tekst in vectoren
+  waarbij vergelijkbare betekenis dicht bij elkaar ligt, zodat je op betekenis kunt zoeken.
+
+  Je voegt een zoek-endpoint toe aan je site dat je {{theme.items}} rangschikt op cosine
+  similarity en weet wanneer niets past. Het platform test het met verborgen zoekopdrachten die
+  de woorden uit je catalogus vermijden — één in het Nederlands — en met vragen die niets met je
+  site te maken hebben.
+category: AI-basis
+objectives:
+  - Uitleggen wat een embedding is en waarom vergelijkbare betekenissen dicht bij elkaar komen
+  - Cosine similarity berekenen en interpreteren
+  - Items rangschikken op gelijkenis en een verstandige drempel voor "geen resultaat" kiezen
+  - Herkennen waar zoeken op trefwoorden nog steeds beter is dan semantic search
+prerequisites: [Tool calling]
+glossary:
+  Embedding: Een lijst getallen (een vector) die de betekenis van een tekst weergeeft. Teksten met een vergelijkbare betekenis krijgen vectoren die ongeveer dezelfde kant op wijzen.
+  Embedding model: Een model dat tekst omzet in embeddings. Zoekvragen en items moeten met hetzelfde model worden ge-embed.
+  Vector: Een lijst getallen. Een embedding heeft er meestal honderden of duizenden.
+  Cosine similarity: Een score voor hoeveel twee vectoren dezelfde kant op wijzen. 1 is dezelfde betekenis, 0 is ongerelateerd.
+  Semantic search: Zoeken op betekenis met embeddings, in plaats van op overeenkomende woorden.
+  Lexical search: Zoeken op overeenkomende woorden, bijvoorbeeld met BM25. Sterk voor namen, codes en zeldzame termen.
+  Hybrid search: Lexical en semantic search combineren en hun rangschikkingen samenvoegen.
+  Threshold: De minimale similarity-score waarboven een resultaat telt. Daaronder geef je "geen resultaten".
+  Multilingual model: Een embedding model dat op veel talen is getraind, zodat een Nederlandse zoekvraag een Engelse beschrijving kan vinden.
+sections:
+  concepts:
+    title: Betekenis als meetkunde
+    steps:
+      embeddings:
+        title: Wat een embedding is
+        body: |
+          Een **embedding model** zet een stuk tekst om in een lijst getallen met een vaste
+          lengte: een vector met honderden of duizenden dimensies. Het model is zo getraind dat
+          teksten met een vergelijkbare betekenis vectoren krijgen die ongeveer dezelfde kant op
+          wijzen.
+
+          - *"Mijn band is helemaal leeg"* en *"Wat doe ik met een lekke band?"* hebben amper
+            woorden gemeen, maar hun vectoren liggen dicht bij elkaar.
+          - *"De bank in de woonkamer"* en *"geld op de bank"* delen een woord, maar hun
+            vectoren liggen ver uit elkaar.
+
+          Om twee vectoren te vergelijken gebruiken we meestal **cosine similarity**: de cosinus
+          van de hoek ertussen. 1 betekent dezelfde richting, 0 betekent ongerelateerd. Veel
+          modellen geven genormaliseerde vectoren terug; dan is cosine similarity gewoon het
+          inproduct (dot product).
+
+          Een paar regels die voor elk embedding model gelden:
+
+          - **Embed zoekvragen en items met hetzelfde model.** Vectoren van verschillende
+            modellen (of versies) zijn niet vergelijkbaar. Wissel je van model, dan embed je alles
+            opnieuw.
+          - **Scores hangen af van het model.** 0,45 kan bij het ene model een prima match zijn
+            en bij het andere ruis. Je stelt drempels per model af.
+          - **Embed waarop je wilt matchen.** Voor je catalogus werken de naam *en* de beschrijving
+            (en misschien de tags) veel beter dan alleen de naam.
+          - **Multilingual models** plaatsen een Nederlandse zoekvraag dicht bij een Engelse
+            beschrijving met dezelfde betekenis. Niet al je bezoekers zoeken in het Engels.
+      search-flow:
+        title: Hoe semantic search werkt
+        config:
+          nodes:
+            - { id: items, label: "Je {{theme.items}}", detail: "Naam + beschrijving + tags van elk item, **één keer** ge-embed bij het opstarten." }
+            - { id: embed-items, detail: "Zet de tekst van elk item om in een vector." }
+            - { id: vectors, label: Item-vectoren, detail: "Voorlopig in het geheugen. In de volgende cursus komt er een vector database." }
+            - { id: query, label: Zoekvraag van bezoeker, detail: "Bijvoorbeeld: *{{theme.search_example}}*." }
+            - { id: embed-query, detail: "**Hetzelfde** model, zodat de vector van de zoekvraag vergelijkbaar is met de item-vectoren." }
+            - { id: rank, label: Cosine similarity + drempel, detail: "Geef elk item een score, sorteer van best naar slechtst en laat alles onder je drempel weg." }
+          edges:
+            - {}
+            - {}
+            - {}
+            - {}
+            - { label: vergelijken }
+      place-parts:
+        title: Maak de zoekpipeline af
+        config:
+          prompt: Sleep de juiste labels naar de lege vakken. Niet elk label is nodig.
+          nodes:
+            - { id: query, label: Zoekvraag van bezoeker }
+            - { id: results, label: Gerangschikte resultaten }
+          edges:
+            - {}
+            - { label: vector van de zoekvraag }
+          chips:
+            - { id: cosine, label: Cosine similarity met elk item }
+            - { id: keywords, label: Overeenkomende woorden tellen }
+            - { id: chat, label: Chatmodel schrijft een antwoord }
+      lexical-vs-semantic:
+        title: Trefwoorden, betekenis of allebei?
+        body: |
+          **Lexical search** (op trefwoorden) zoekt exacte termen, vaak met een score zoals BM25.
+          Sterk voor namen, productcodes en zeldzame termen, maar blind voor synoniemen en
+          omschrijvingen.
+
+          **Semantic search** zoekt op betekenis via embeddings. Sterk voor natuurlijke vragen en
+          omschrijvingen, met multilingual models ook over talen heen. Zwakker voor exacte codes en
+          nieuw jargon dat het model nooit gezien heeft.
+
+          **Hybrid search** doet allebei en voegt de rangschikkingen samen, bijvoorbeeld met
+          reciprocal rank fusion. Dat is de standaard in de meeste zoekfuncties in productie,
+          omdat het beide zwakke plekken afdekt.
+
+          **Drempels.** Een rangschikking geeft altijd *iets* terug. Wil je "geen resultaten"
+          kunnen zeggen, kijk dan naar de beste score: onder een drempel die je op echte
+          zoekvragen hebt afgesteld, geef je niets terug in plaats van een zelfverzekerd fout
+          antwoord.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: cosine
+              prompt: Wat is de cosine similarity van de vectoren [1, 0] en [0, 1]?
+              explanation: Ze staan loodrecht op elkaar, dus de hoek is 90° en de cosinus is 0 — ongerelateerd.
+            - id: model-change
+              prompt: Je stapt over op een nieuwer embedding model. Wat moet je doen met de opgeslagen item-vectoren?
+              explanation: Vectoren van verschillende modellen leven in verschillende ruimtes en zijn niet vergelijkbaar.
+              options:
+                - { id: nothing, text: "Niets, vectoren zijn onafhankelijk van het model" }
+                - { id: reembed, text: "Alle items opnieuw embedden met het nieuwe model" }
+                - { id: normalize, text: "Ze opnieuw normaliseren" }
+            - id: identifier
+              prompt: Bezoekers zoeken ook op exacte item-id's zoals {{theme.probes.catalog.item_id}}. Welke aanpak werkt daar het best?
+              explanation: Exacte id's zijn lexical. Met hybrid search houd je semantic search voor al het andere.
+              options:
+                - { id: semantic, text: "Puur semantic search" }
+                - { id: hybrid, text: "Hybrid: zoeken op trefwoorden gecombineerd met semantic search" }
+                - { id: bigger, text: "Een groter embedding model" }
+            - id: threshold
+              prompt: Waarom stel je een minimale similarity-score af?
+              explanation: Een rangschikking geeft altijd een bovenste resultaat; met een drempel kun je "geen resultaten" antwoorden in plaats van te gokken.
+              options:
+                - { id: speed, text: "Om sneller te zoeken" }
+                - { id: none, text: "Zodat de zoekfunctie niets kan teruggeven in plaats van een fout resultaat" }
+                - { id: storage, text: "Om minder vectoren op te slaan" }
+  build:
+    title: Bouw de zoekfunctie
+    steps:
+      previous-course:
+        title: Je tools werken
+      contract:
+        title: Het zoek-endpoint
+        body: |
+          Voeg een zoek-endpoint toe aan je server. Gebruik een embedding model naar keuze, liefst
+          een **multilingual** model: een gehoste embeddings-API of een lokaal model.
+
+          1. Embed bij het opstarten elk item uit `data/items.json` één keer — naam, beschrijving
+             en tags samen — en houd de vectoren in het geheugen.
+          2. `GET /api/search?q=<zoekvraag>` embedt de zoekvraag, geeft elk item een score met
+             cosine similarity en antwoordt met hooguit **5** resultaten boven je drempel, de beste
+             eerst.
+          3. Is niets relevant, antwoord dan `{ "results": [] }`.
+
+          Voeg daarna een zoekvak toe aan je homepage dat het endpoint aanroept. Dat deel wordt
+          niet gecontroleerd, maar het is wel het leukste: probeer zelf een paar zoekopdrachten.
+        config:
+          snippets:
+            - {}
+            - { caption: Cosine similarity in een paar regels. Veel modellen geven al genormaliseerde vectoren terug. }
+      search:
+        title: Voer de zoekchecks uit
+        body: |
+          Het platform stuurt verborgen zoekopdrachten naar `/api/search`. De meeste delen geen
+          belangrijke woorden met de juiste {{theme.item}}, dus zoeken op trefwoorden faalt; één is
+          in het Nederlands. Twee hebben niets met {{theme.data.site.name}} te maken en moeten geen
+          resultaten opleveren.
+
+          De formaatcheck moet slagen, en minstens twee derde van de betekenischecks.
+        validation:
+          cases:
+            - { id: format, label: "Geeft hooguit 5 resultaten, de beste eerst" }
+            - { id: dutch, label: "Een Nederlandse zoekvraag vindt de juiste {{theme.item}}" }
+            - { id: paraphrase, label: "Een omschrijving zonder woorden uit de catalogus vindt de juiste {{theme.item}}" }
+            - { id: need, label: "Een beschreven behoefte vindt de juiste {{theme.item}}" }
+            - { id: situation, label: "Een beschreven situatie vindt de juiste {{theme.item}}" }
+            - { id: off-topic-passport, label: Een vraag over paspoorten geeft geen resultaten }
+            - { id: off-topic-geography, label: Een aardrijkskundevraag geeft geen resultaten }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Wanneer winnen trefwoorden?
+        config:
+          prompt: Beschrijf een zoekopdracht op {{theme.data.site.name}} waarbij zoeken op trefwoorden beter werkt dan je semantic search, en hoe je beide zou combineren.
+        validation:
+          required_concepts:
+            - { label: beide combineren (hybrid), any_of: [hybrid, combine, both, fusion, together, keyword, combiner, beide, samen, trefwoord] }
+      finish:
+        title: Je zoekfunctie begrijpt betekenis
+        body: |
+          Bezoekers van {{theme.data.site.name}} kunnen nu zoeken zoals ze praten. De volgende
+          cursus zet de vectoren in een vector database, met filters en live updates.

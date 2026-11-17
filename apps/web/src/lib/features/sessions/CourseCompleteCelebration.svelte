@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
 
@@ -105,21 +106,21 @@
 			type="button"
 			onclick={onclose}
 			class="absolute top-3 right-3 rounded p-1 text-fg-subtle hover:bg-surface-hover hover:text-fg"
-			aria-label="Close"
+			aria-label={t('common.close')}
 		>
 			<Icon name="x" size={14} />
 		</button>
 		<div class="mx-auto grid size-14 place-items-center rounded-full bg-success-soft text-success">
 			<Icon name="check" size={28} strokeWidth={2} />
 		</div>
-		<h2 id="celebration-title" class="mt-5 text-[22px] font-semibold tracking-tight">Congratulations!</h2>
+		<h2 id="celebration-title" class="mt-5 text-[22px] font-semibold tracking-tight">{t('celebration.title')}</h2>
 		<p class="mt-2 text-[14px] text-fg-muted">
-			You completed <span class="font-medium text-fg">{courseTitle}</span>. That's {stepCount} steps of hands-on work done.
+			{t('celebration.body', { course: courseTitle, count: stepCount })}
 		</p>
 		<div class="mt-7 flex flex-col gap-2 sm:flex-row sm:justify-center">
-			<Button variant="primary" href="/courses">Find your next course <Icon name="arrow-right" size={14} /></Button>
-			<Button href="/courses/{courseId}">Course overview</Button>
+			<Button variant="primary" href="/courses">{t('celebration.next')} <Icon name="arrow-right" size={14} /></Button>
+			<Button href="/courses/{courseId}">{t('celebration.overview')}</Button>
 		</div>
-		<button type="button" onclick={onclose} class="mt-4 text-[12px] text-fg-subtle hover:text-fg">Keep reviewing this course</button>
+		<button type="button" onclick={onclose} class="mt-4 text-[12px] text-fg-subtle hover:text-fg">{t('celebration.keep')}</button>
 	</div>
 </div>

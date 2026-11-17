@@ -1,3 +1,4 @@
+import { t } from '#lib/i18n/index.svelte.ts';
 import { ApiError } from '#lib/services/api/client.ts';
 import { sessionsApi } from '#lib/services/api/sessions.ts';
 import type {
@@ -79,6 +80,15 @@ export class LearningSession {
 		return result?.outcome ?? null;
 	}
 
+	/** Reloads the course too, e.g. after choosing a project changes its rendered text. */
+	async reload(): Promise<void> {
+		try {
+			this.detail = await sessionsApi.get(this.sessionId);
+		} catch (error) {
+			this.error = error instanceof ApiError ? error.message : t('common.error');
+		}
+	}
+
 	async recheck(): Promise<void> {
 		await this.run(async () => ({ progress: await sessionsApi.refresh(this.sessionId), outcome: null }));
 	}
@@ -104,7 +114,7 @@ export class LearningSession {
 			this.applyProgress(result.progress);
 			return result;
 		} catch (error) {
-			this.error = error instanceof ApiError ? error.message : 'Something went wrong.';
+			this.error = error instanceof ApiError ? error.message : t('common.error');
 			return null;
 		} finally {
 			this.pending = false;

@@ -499,16 +499,16 @@ mod tests {
 
     #[tokio::test]
     async fn validates_json_configuration_with_wildcards() {
-        let config = json!({ "file": ".vscode/mcp.json", "format": "json" });
+        let config = json!({ "file": ".mcp.json", "format": "json" });
         let validation = json!({ "rules": [
-            { "pointer": "/servers/*/type", "equals": "http" },
-            { "pointer": "/servers/*/url", "contains": "/mcp" }
+            { "pointer": "/mcpServers/*/type", "equals": "http" },
+            { "pointer": "/mcpServers/*/url", "contains": "/mcp" }
         ] });
-        let document = r#"{ "servers": { "learning": { "type": "http", "url": "http://localhost:8080/mcp" } } }"#;
+        let document = r#"{ "mcpServers": { "learning": { "type": "http", "url": "http://localhost:8080/mcp" } } }"#;
         let outcome = FilesystemExtension::new()
             .validate_submission(
                 &ctx(CONFIGURATION_VALIDATION, &config, &validation),
-                &files(&[(".vscode/mcp.json", document)]),
+                &files(&[(".mcp.json", document)]),
             )
             .await
             .unwrap();

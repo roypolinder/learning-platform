@@ -1,19 +1,20 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: agent-skills-advanced
-version: 1.0.0
-title: "Advanced skills: scripts, references and evals"
+version: 2.0.0
+title: Advanced skills
 summary: Build a skill that bundles a deterministic script and reference material, test when it triggers, and prove its output is exactly right.
 description: |
   Simple skills are instructions. Powerful skills also bundle **scripts** for work models are
   bad at (exact arithmetic, parsing, file conversions), **reference files** the agent loads
   only when needed, and **evals** that show the skill triggers at the right moments.
 
-  You will build an `expense-report` skill with your agent, run it on a fixed set of expenses
-  and submit the result. The platform checks the skill's structure and that the output matches
-  the exact totals to the cent.
+  Your receipt scanner turns supplier receipts into expenses. Now {{theme.data.site.name}} needs
+  a monthly overview of them. You build an `expense-report` skill with your agent, run it on a
+  month of expenses and submit the result. The platform checks the skill's structure and that
+  the output matches the exact totals to the cent.
 category: AI agents
 difficulty: intermediate
-order: 50
+order: 10
 estimated_minutes: 60
 tags: [skills, agents, progressive-disclosure, evals, scripts]
 objectives:
@@ -22,8 +23,23 @@ objectives:
   - Write trigger evals that show when a skill should and should not load
   - Review third-party skills for security risks before installing them
 prerequisites:
-  - title: Create an AI agent skill
-    course: agent-skill-basics
+  - title: "RAG: answers from your own content"
+    course: rag-fundamentals
+glossary:
+  - term: Scripts
+    definition: Code bundled in a skill's `scripts/` folder. The agent runs it; only its output enters the context.
+  - term: References
+    definition: Files in a skill's `references/` folder that the agent only reads when the instructions point to them.
+  - term: Progressive disclosure
+    definition: Loading a skill in levels — metadata always, instructions on use, resources only when needed.
+  - term: Deterministic
+    definition: Always gives the same output for the same input. Arithmetic and parsing should be deterministic; models are not.
+  - term: Trigger eval
+    definition: A test prompt that should, or should not, make the agent load a skill.
+  - term: Output eval
+    definition: A test that checks whether the result of a skill is correct, ideally against exact expected values.
+  - term: Near-miss
+    definition: A prompt close to a skill's domain that should still not trigger it. Catches descriptions that are too broad.
 extensions: [quiz, mcp, filesystem]
 help: |
   The learner writes the skill together with their own agent. Help them decide what belongs in
@@ -79,32 +95,38 @@ sections:
           Keep `SKILL.md` short and procedural, and link to references for details: *"For the
           full meal policy, read `references/policy.md`."*
 
-      - id: scripts-and-safety
-        type: interactive_content
-        title: Scripts, evals and safety
-        estimated_minutes: 6
+      - id: levels
+        type: diagram
+        title: What gets loaded when
+        estimated_minutes: 2
         config:
-          panels:
-            - title: Why scripts
-              body: |
-                Models are great at deciding *what* to do and poor at exact repetitive work.
-                Summing 200 amounts, validating a schema or converting a file belongs in a
-                script: it's faster, cheaper and the same every time.
-            - title: Trigger evals
-              body: |
-                A skill that never loads is useless; one that loads for everything is noise.
-                Keep a small set of prompts that *should* trigger it and near-misses that
-                *should not*, and rerun them when you change the description.
-            - title: Output evals
-              body: |
-                For prompts that should trigger, write down what a correct result looks like,
-                ideally something checkable like exact totals. That's what the platform does
-                with your submission in this course.
-            - title: Security
-              body: |
-                A skill can make an agent run code. Only install skills from sources you trust,
-                read their scripts before installing them, and prefer skills that need
-                minimal permissions. Treat a skill like a dependency.
+          nodes:
+            - { id: meta, label: "1. name + description", kind: data, row: 0, col: 0, detail: "Always in context for every skill. This is how the agent decides whether a skill is relevant." }
+            - { id: body, label: "2. SKILL.md body", kind: app, row: 0, col: 1, detail: "Loaded when a request matches the description. Short and procedural." }
+            - { id: refs, label: "3a. references/", kind: data, row: 1, col: 1, detail: "Read only when the instructions point to them, e.g. the expense policy." }
+            - { id: scripts, label: "3b. scripts/", kind: tool, row: 1, col: 2, detail: "**Run**, not read. Only the output enters the context, so a long script costs nothing." }
+          edges:
+            - { from: meta, to: body, label: match }
+            - { from: body, to: refs, label: when needed }
+            - { from: body, to: scripts, label: when needed }
+
+      - id: scripts-and-safety
+        type: explanation
+        title: Scripts, evals and safety
+        estimated_minutes: 5
+        body: |
+          - **Why scripts.** Models are great at deciding *what* to do and poor at exact
+            repetitive work. Summing 200 amounts, validating a schema or converting a file belongs
+            in a script: it's faster, cheaper and the same every time.
+          - **Trigger evals.** A skill that never loads is useless; one that loads for everything
+            is noise. Keep a small set of prompts that *should* trigger it and near-misses that
+            *should not*, and rerun them when you change the description.
+          - **Output evals.** For prompts that should trigger, write down what a correct result
+            looks like, ideally something checkable like exact totals. That's what the platform
+            does with your submission in this course.
+          - **Security.** A skill can make an agent run code. Only install skills from sources you
+            trust, read their scripts before installing them, and prefer skills that need minimal
+            permissions. Treat a skill like a dependency.
 
       - id: check-concepts
         type: quiz
@@ -144,6 +166,12 @@ sections:
   - id: build
     title: Build the expense-report skill
     steps:
+      - id: previous-course
+        type: prerequisite
+        title: Your assistant works
+        config:
+          courses: [rag-fundamentals]
+
       - id: connection
         type: reusable_section
         title: Agent connection
@@ -155,8 +183,8 @@ sections:
         title: The requirements and the data
         estimated_minutes: 4
         body: |
-          Build a skill named **`expense-report`** with your agent. It turns an expenses CSV into
-          a summary. Requirements:
+          Build a skill named **`expense-report`** with your agent, in the project of
+          {{theme.data.site.name}}. It turns an expenses CSV into a summary. Requirements:
 
           - `SKILL.md` has `name` and `description` frontmatter, a `## Steps` section, and
             mentions both `scripts/` and `references/`. Keep it under 5,000 characters.
@@ -292,7 +320,7 @@ sections:
         optional: true
         estimated_minutes: 3
         config:
-          prompt: Name a task from your own work that would make a good skill with a script. What would the script do, and what would the model still decide?
+          prompt: Name another task for {{theme.data.site.name}} that would make a good skill with a script. What would the script do, and what would the model still decide?
         validation:
           min_words: 25
           required_concepts:
@@ -304,4 +332,4 @@ sections:
         depends_on: [summary-output, trigger-evals]
         body: |
           Your skill combines judgment from the model with exact work from code, and you can
-          show when it triggers.
+          show when it triggers. Next, you turn {{theme.data.site.name}} into an MCP server.

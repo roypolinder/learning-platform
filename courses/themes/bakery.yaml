@@ -1,0 +1,41 @@
+id: bakery
+order: 2
+icon: bread
+name: { en: Bakery, nl: Bakkerij }
+tagline: { en: "Order bread, pastries and cakes", nl: "Brood, gebak en taarten bestellen" }
+vars:
+  en: { site_kind: bakery website, business: bakery, item: product, items: products, search_example: a cake for a birthday }
+  nl: { site_kind: bakkerijwebsite, business: bakkerij, item: product, items: producten, search_example: taart voor een verjaardag }
+data:
+  site: { name: De Korenschoof, city: Haarlem }
+  items:
+    - { id: sourdough-loaf, name: Sourdough loaf, category: bread, price: 5.5, description: "Slow-fermented white sourdough with a crackling crust, baked every morning.", tags: [daily, classic] }
+    - { id: whole-wheat-bread, name: Whole wheat bread, category: bread, price: 3.75, description: "Wholemeal bread full of fibre, perfect for sandwiches.", tags: [healthy, sandwiches] }
+    - { id: gluten-free-bread, name: Gluten-free bread, category: bread, price: 6.25, description: "Bread made without wheat, rye or barley, baked separately for people with coeliac disease or a gluten intolerance.", tags: [gluten free, allergy] }
+    - { id: spelt-bread, name: Spelt bread, category: bread, price: 4.5, description: "Nutty bread made from ancient spelt grain.", tags: [grain] }
+    - { id: baguette, name: Baguette, category: bread, price: 2.25, description: "Long, thin French white bread with a crisp crust.", tags: [french] }
+    - { id: croissant, name: Butter croissant, category: pastry, price: 1.6, description: "Flaky, golden layers of butter pastry. Lovely with a morning coffee.", tags: [breakfast] }
+    - { id: cinnamon-roll, name: Cinnamon roll, category: pastry, price: 2.4, description: "Soft swirl of dough with cinnamon sugar and a vanilla glaze.", tags: [sweet] }
+    - { id: vegan-banana-bread, name: Vegan banana bread, category: pastry, price: 3.2, description: "Moist loaf of ripe bananas and walnuts, made without eggs, butter or milk.", tags: [vegan, plant-based, sweet] }
+    - { id: apple-pie, name: Dutch apple pie, category: cake, price: 18.5, description: "Traditional lattice pie with apples, cinnamon and raisins. Serves 8.", tags: [traditional] }
+    - { id: birthday-cake, name: Birthday cake, category: cake, price: 32, description: "Layered sponge cake with cream and fruit, decorated with a name and candles of your choice. Order 48 hours ahead.", tags: [celebration, custom] }
+    - { id: chocolate-cake, name: Chocolate cake, category: cake, price: 24, description: "Rich dark chocolate cake with ganache.", tags: [chocolate] }
+    - { id: sandwich-platter, name: Party sandwich platter, category: catering, price: 39, description: "Platter with 20 mini sandwiches with cheese, ham and vegetarian fillings, for parties and meetings.", tags: [party, catering] }
+  pages:
+    - { id: about, title: About De Korenschoof, body: "De Korenschoof is a family bakery at Grote Houtstraat 21 in Haarlem. We are open Tuesday to Saturday from 7:00 to 18:00. On Sundays and Mondays the bakery is closed." }
+    - { id: ordering, title: Ordering cakes, body: "Birthday cakes and other custom cakes must be ordered at least 48 hours in advance, online or in the shop. You can pick them up from 9:00 on the chosen day." }
+    - { id: delivery, title: Delivery, body: "We deliver in Haarlem on weekdays between 10:00 and 14:00. Delivery costs 4 euros, and orders above 40 euros are delivered for free." }
+    - { id: allergens, title: Allergens, body: "All products are made in a kitchen that also uses nuts and sesame. Gluten-free bread is baked separately on Mondays, using its own equipment." }
+probes:
+  catalog: { count: 12, item_id: sourdough-loaf, item_name: Sourdough loaf, category: cake, category_ids: [apple-pie, birthday-cake, chocolate-cake], item_price: 5.5, price_mentions: ["5.5", "5,5"] }
+  search:
+    dutch: { query: taart voor een verjaardag, expected: birthday-cake }
+    paraphrase: { query: bread I can eat with coeliac disease, expected: gluten-free-bread }
+    need: { query: something sweet without any animal products, expected: vegan-banana-bread }
+    situation: { query: a flaky pastry to go with my coffee in the morning, expected: croissant }
+  vector: { query: something for a party, category: cake, expected: birthday-cake, excluded: sandwich-platter }
+  rag:
+    fact: { question: "Are you open on Mondays?", answer_any: [closed, gesloten, "not open", "niet open"], source: about }
+    policy: { question: "How far in advance do I need to order a birthday cake?", answer_any: ["48", two days, 2 days, twee dagen], source: ordering }
+    detail: { question: "From what amount is delivery free?", answer_any: ["40"], source: delivery }
+    unanswerable: { question: "Do you offer baking workshops for children?" }

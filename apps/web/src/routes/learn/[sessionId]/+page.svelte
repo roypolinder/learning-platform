@@ -15,6 +15,8 @@
 	import { stepTypeLabel } from '#lib/features/sessions/step-labels.ts';
 	import { goto } from '$app/navigation';
 	import { requireAuth } from '#lib/state/require-auth.svelte.ts';
+	import GlossarySidebar from '#lib/features/glossary/GlossarySidebar.svelte';
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import { formatStepStatus } from '#lib/utils/format.ts';
 	import type { PageProps } from './$types';
 
@@ -47,6 +49,25 @@
 		) ?? null
 	);
 
+	// The terms & notes sidebar stays open across steps and visits once a learner opens it.
+	const GLOSSARY_KEY = 'lp-glossary-open';
+	let glossaryOpen = $state(readGlossaryPreference());
+	function readGlossaryPreference(): boolean {
+		try {
+			return localStorage.getItem(GLOSSARY_KEY) === '1';
+		} catch {
+			return false;
+		}
+	}
+	function toggleGlossary(open = !glossaryOpen) {
+		glossaryOpen = open;
+		try {
+			localStorage.setItem(GLOSSARY_KEY, open ? '1' : '0');
+		} catch {
+			// Only remembered for this page view.
+		}
+	}
+
 	let celebrating = $state(false);
 	// null until the session has loaded, so revisiting a finished course doesn't celebrate again.
 	let wasDone: boolean | null = null;
@@ -60,15 +81,15 @@
 	});
 </script>
 
-<svelte:head><title>{session?.detail?.course.title ?? 'Learning'} · Learning Platform</title></svelte:head>
+<svelte:head><title>{session?.detail?.course.title ?? t('courses.title')} · {t('app.name')}</title></svelte:head>
 
 {#if session?.loadError}
 	<div class="mx-auto max-w-xl px-6 py-16">
 		<EmptyState
-			title={session.loadError.status === 404 ? 'Session not found' : 'Could not load this session'}
-			description={session.loadError.status === 404 ? 'It may belong to another account.' : session.loadError.message}
+			title={t(session.loadError.status === 404 ? 'learn.not_found' : 'learn.load_error')}
+			description={session.loadError.status === 404 ? t('learn.not_found_body') : session.loadError.message}
 		>
-			{#snippet actions()}<Button href="/courses">Browse courses</Button>{/snippet}
+			{#snippet actions()}<Button href="/courses">{t('course.browse')}</Button>{/snippet}
 		</EmptyState>
 	</div>
 {:else if !session?.detail}
@@ -83,14 +104,19 @@
 			<Icon name="arrow-left" size={14} />
 			<span class="truncate font-medium text-fg">{detail.course.title}</span>
 		</a>
-		<div class="ml-auto"><HelpButton course={detail.course} {step} /></div>
-		<div class="flex w-56 items-center gap-3">
-			<ProgressBar value={detail.progress.percent} label="Course progress" />
+		<div class="ml-auto flex items-center gap-1">
+			<HelpButton course={detail.course} {step} />
+			<Button size="sm" variant="ghost" onclick={() => toggleGlossary()} aria-expanded={glossaryOpen} aria-controls="glossary-sidebar" title={t('glossary.open')}>
+				<Icon name="notes" size={14} /> <span class="hidden sm:inline">{t('learn.glossary')}</span>
+			</Button>
+		</div>
+		<div class="hidden w-56 items-center gap-3 md:flex">
+			<ProgressBar value={detail.progress.percent} label={t('learn.progress')} />
 			<span class="shrink-0 font-mono text-[12px] text-fg-muted">{detail.progress.percent}%</span>
 		</div>
 	</div>
 
-	<div class="grid lg:grid-cols-[272px_minmax(0,1fr)]">
+	<div class="grid lg:grid-cols-[272px_minmax(0,1fr)] {glossaryOpen ? 'xl:pr-[420px]' : ''}">
 		<aside class="hidden border-r border-line px-3 py-5 lg:block">
 			<div class="sticky top-17"><StepNavigation {session} /></div>
 		</aside>
@@ -98,15 +124,15 @@
 		<article class="mx-auto w-full max-w-[720px] px-6 py-8">
 			{#if courseDone}
 				<div class="mb-6">
-					<Notice tone="success" title="Course completed">
-						Every required step is done. Optional steps stay open if you want to explore further.
-						<a href="/courses" class="ml-1 font-medium underline underline-offset-2">Find your next course</a>
+					<Notice tone="success" title={t('learn.course_completed')}>
+						{t('learn.course_completed_body')}
+						<a href="/courses" class="ml-1 font-medium underline underline-offset-2">{t('learn.next_course')}</a>
 					</Notice>
 				</div>
 			{/if}
 
 			{#if step}
-				<header class="mb-6">
+				<header class="mb-8 border-b border-line pb-6">
 					<p class="flex items-center gap-2 text-[12px] text-fg-subtle">
 						<span>{session.selectedSection?.title}</span>
 						<Icon name="chevron-right" size={12} />
@@ -125,7 +151,7 @@
 				</header>
 
 				{#if session.remoteCompletion === step.id}
-					<div class="mb-5"><Notice tone="success">Completed by your agent just now.</Notice></div>
+					<div class="mb-5"><Notice tone="success">{t('learn.agent_completed')}</Notice></div>
 				{/if}
 
 				{#if step.body}<Markdown source={step.body} class="mb-6" />{/if}
@@ -148,17 +174,21 @@
 						</button>
 					{:else if courseDone}
 						<Button variant="primary" size="sm" onclick={() => (celebrating = true)}>
-							Finish course <Icon name="check" size={14} />
+							{t('learn.finish')} <Icon name="check" size={14} />
 						</Button>
 					{:else if unfinished && unfinished.id !== step.id}
 						<button type="button" class="flex items-center gap-1.5 text-fg-muted hover:text-fg" onclick={() => session?.select(unfinished.id)}>
-							Unfinished: {unfinished.title} <Icon name="arrow-right" size={14} />
+							{t('learn.unfinished', { title: unfinished.title })} <Icon name="arrow-right" size={14} />
 						</button>
 					{/if}
 				</footer>
 			{/if}
 		</article>
 	</div>
+
+	{#if glossaryOpen}
+		<GlossarySidebar course={detail.course} onclose={() => toggleGlossary(false)} />
+	{/if}
 
 	{#if celebrating}
 		<CourseCompleteCelebration

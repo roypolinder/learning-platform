@@ -1,37 +1,54 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: vector-databases
-version: 1.0.0
-title: Vector databases in practice
-summary: Store embeddings in a vector database, search with metadata filters, and keep the index in sync as documents change.
+version: 2.0.0
+title: Vector databases
+summary: Move the search of your site into a vector database, filter on metadata during search, and keep the index in sync as your catalog changes.
 description: |
-  Once you have more than a handful of documents, you need somewhere to keep the vectors and
-  a fast way to find the nearest ones. That's what vector databases do: approximate
-  nearest-neighbour indexes, metadata filters and live inserts and deletes.
+  Keeping every vector in memory works for a dozen {{theme.items}}, not for a real catalog that
+  grows and changes every day. Vector databases store vectors with metadata, find the nearest
+  ones fast with an approximate index, and let you add, update and delete records live.
 
-  You will index a company intranet in the vector store of your choice, behind a small
-  search API. The platform searches it with hidden queries, for example that **"money"**
-  brings up finance documents first. It also checks that filters work and that new and
-  deleted documents show up in search immediately.
+  You move the search of {{theme.data.site.name}} into the vector store of your choice. The
+  platform checks that filters work *during* the search, and that new, changed and deleted
+  {{theme.items}} show up in search results right away.
 category: Retrieval
 difficulty: intermediate
-order: 20
-estimated_minutes: 70
-tags: [vector-database, embeddings, ann, hnsw, metadata-filtering, hybrid-search]
+order: 7
+estimated_minutes: 60
+tags: [vector-database, embeddings, ann, hnsw, metadata-filtering]
 objectives:
   - Explain how approximate nearest-neighbour indexes such as HNSW trade accuracy for speed
-  - Store documents with vectors and metadata, and filter during search
-  - Keep the index consistent when documents are added, updated or deleted
+  - Store items with vectors and metadata, and filter during search
+  - Keep the index consistent when items are added, updated or deleted
   - Choose a distance metric and know when to re-embed
 prerequisites:
-  - title: Semantic matching with embeddings
+  - title: Semantic search
     course: semantic-matching
+glossary:
+  - term: Vector database
+    definition: A database that stores vectors with metadata and finds the nearest vectors to a query fast.
+  - term: ANN
+    definition: Approximate nearest neighbour search. Very fast, at the cost of occasionally missing a true nearest neighbour.
+  - term: HNSW
+    definition: Hierarchical navigable small world. The most common ANN index, a layered graph you walk towards the query.
+  - term: Recall
+    definition: The share of the true nearest neighbours that a search actually finds.
+  - term: Metadata
+    definition: Extra fields stored with a vector, such as category or price, that you can filter on.
+  - term: Pre-filtering
+    definition: Applying a filter during the vector search, so you always get the best matches that pass it.
+  - term: Upsert
+    definition: Insert a record, or replace it if a record with the same id exists. Keeps the index in sync with your data.
+  - term: Distance metric
+    definition: How closeness is measured, for example cosine or dot product. Use the one your embedding model was trained for.
+  - term: Quantization
+    definition: Compressing vectors (for example to 8 bits per number) so more fit in memory, with a small loss in accuracy.
 extensions: [quiz, service]
 help: |
   The learner chooses any vector store: a Postgres extension, a dedicated vector database or an
-  embedded library. Help them with data modelling (id, text, metadata, vector), choosing
-  the distance metric that matches their embedding model, filtering during search, and
-  upsert/delete semantics. Don't pick the product for them unless they ask, and don't write
-  the service.
+  embedded library. Help them with data modelling (id, text, metadata, vector), choosing the
+  distance metric that matches their embedding model, filtering during search, and upsert/delete
+  semantics. Don't pick the product for them unless they ask, and don't write the service.
 
 sections:
   - id: concepts
@@ -49,57 +66,60 @@ sections:
           - **HNSW** (hierarchical navigable small world graphs) is the most common: a layered
             graph you walk greedily towards the query. It's fast and accurate, but memory hungry.
           - **IVF** clusters vectors and only searches the closest clusters.
-          - **Quantization** compresses vectors (to 8 bits, or even 1 bit per dimension) so more fit
-            in memory, at a small cost in accuracy. A common trick is to over-fetch with
-            compressed vectors and rescore the top results exactly.
+          - **Quantization** compresses vectors so more fit in memory, at a small cost in
+            accuracy. A common trick is to over-fetch with compressed vectors and rescore the top
+            results exactly.
 
           *Approximate* means recall below 100%: occasionally a true neighbour is missed. Index
           parameters (for HNSW: `M`, `ef_construction`, `ef_search`) tune that trade-off.
 
-          A record in a vector database typically has:
+          A record for one of your {{theme.items}} could look like this:
 
           | Field | Example |
           | --- | --- |
-          | id | `fin-01` |
+          | id | `{{theme.probes.catalog.item_id}}` |
           | vector | `[0.013, -0.27, …]` |
-          | metadata | `{ "category": "finance", "updated": "2026-10-01" }` |
-          | text | the original chunk, so you can show or cite it |
+          | metadata | `{ "category": "…", "price": … }` |
+          | text | name + description, so you can show it |
 
           Your options range from a vector extension in a database you already run, to dedicated
-          vector databases, to embedded libraries inside your process. The concepts in this course
-          apply to all of them.
+          vector databases, to embedded libraries inside your process. The concepts in this
+          course apply to all of them.
+
+      - id: write-and-read
+        type: diagram
+        title: The write path and the read path
+        estimated_minutes: 3
+        config:
+          nodes:
+            - { id: change, label: "A {{theme.item}} is added or changed", kind: person, row: 0, col: 0, detail: "Through your API, for example `POST /api/items`." }
+            - { id: embed-write, label: Embedding model, kind: model, row: 0, col: 1, detail: "Embed the new text with the same model as everything else." }
+            - { id: db, label: Vector database, kind: data, row: 0, col: 2, detail: "**Upsert** by id: a changed item replaces its old vector, so stale results can't appear." }
+            - { id: query, label: Search with a filter, kind: person, row: 1, col: 0, detail: "For example: *{{theme.probes.vector.query}}* in category `{{theme.probes.vector.category}}`." }
+            - { id: embed-read, label: Embedding model, kind: model, row: 1, col: 1, detail: "The query vector." }
+            - { id: ann, label: ANN search + filter, kind: tool, row: 1, col: 2, detail: "Filter **during** the search, so you get the best matches that pass the filter." }
+          edges:
+            - { from: change, to: embed-write }
+            - { from: embed-write, to: db, label: upsert }
+            - { from: query, to: embed-read }
+            - { from: embed-read, to: ann }
+            - { from: db, to: ann, label: nearest }
 
       - id: production
-        type: interactive_content
+        type: explanation
         title: What matters in production
-        estimated_minutes: 6
-        config:
-          panels:
-            - title: Distance metric
-              body: |
-                Use the metric your embedding model was trained for, usually cosine (or dot
-                product on normalized vectors). Mixing metrics silently degrades results.
-            - title: Filtering
-              body: |
-                Real queries come with constraints: one category, one tenant, only documents a
-                user may see. Filtering *during* the ANN search avoids the trap of
-                post-filtering, where the top 5 are all filtered away and nothing is left.
-                Access-control filters are a security boundary, not a nicety.
-            - title: Keeping in sync
-              body: |
-                Documents change. Use stable ids and **upserts** so an update replaces the old
-                vector, and delete vectors when the source is deleted. Stale vectors are the
-                most common cause of wrong answers in retrieval systems.
-            - title: Model versions
-              body: |
-                Record which embedding model produced each vector. Changing models means
-                re-embedding everything into a new collection and switching over once it's
-                complete.
-            - title: Hybrid and reranking
-              body: |
-                Many stores also support keyword (BM25) search. Combine both rankings, then
-                optionally rerank the top 20–50 with a cross-encoder or reranker model for the
-                best precision.
+        estimated_minutes: 5
+        body: |
+          - **Distance metric.** Use the metric your embedding model was trained for, usually
+            cosine (or dot product on normalized vectors). Mixing metrics silently degrades results.
+          - **Filtering.** Real queries come with constraints: one category, a maximum price, only
+            records a user may see. Filtering *during* the ANN search avoids the trap of
+            post-filtering, where the top 5 are all filtered away and nothing is left.
+          - **Keeping in sync.** Use stable ids and **upserts** so an update replaces the old
+            vector, and delete vectors when the source is deleted. Stale vectors are the most
+            common cause of wrong answers in retrieval systems.
+          - **Model versions.** Record which embedding model produced each vector. Changing models
+            means re-embedding everything into a new collection and switching over when it's done.
 
       - id: check-concepts
         type: quiz
@@ -116,14 +136,14 @@ sections:
                 - { id: metadata, text: "The ability to store metadata" }
                 - { id: deletes, text: "Support for deletes" }
             - id: postfilter
-              prompt: You fetch the top 5 results and then remove those the user may not see. What can go wrong?
+              prompt: You fetch the top 5 results and then remove those outside the chosen category. What can go wrong?
               explanation: Post-filtering can leave you with too few, or zero, results. Filter during the search instead.
               options:
                 - { id: empty, text: "You may end up with few or no results", correct: true }
                 - { id: slow, text: "Nothing, it's the recommended approach" }
                 - { id: leak, text: "The vectors become invalid" }
             - id: update
-              prompt: A document is edited. How do you keep search correct?
+              prompt: The description of a {{theme.item}} changes. How do you keep search correct?
               explanation: Upsert by stable id replaces the vector and metadata, so the old version can't be found anymore.
               options:
                 - { id: insert, text: "Insert the new version with a new id" }
@@ -138,142 +158,141 @@ sections:
                 - { id: none, text: "There is no way; accept the loss" }
 
   - id: build
-    title: Build the search API
+    title: Move search into a vector database
     steps:
-      - id: corpus
+      - id: previous-course
+        type: prerequisite
+        title: Your semantic search works
+        config:
+          courses: [semantic-matching]
+
+      - id: contract
         type: code_example
-        title: The intranet and the contract
-        estimated_minutes: 5
+        title: The new endpoints
+        estimated_minutes: 4
         body: |
-          Index the *Brightwell Studio* intranet below in any vector store, using any embedding
-          model. Wrap it in a small HTTP service:
+          Pick a vector store and load every item of `data/items.json` into it, with the
+          category and price as metadata. Then change and add these endpoints:
 
-          - `GET /search?q=<text>&k=<n>&category=<optional>` returns the `k` most
-            similar documents (default 5), filtered by category when given, best first:
-            `{"results": [{"id": "...", "category": "...", "score": 0.81, "text": "..."}]}`.
-            A higher score means more similar.
-          - `POST /documents` with `{"id": "...", "text": "...", "category": "..."}` embeds and
-            **upserts** a document. Respond with 200 or 201.
-          - `DELETE /documents/{id}` removes it. Respond with 200 or 204.
+          - `GET /api/search?q=…&k=…&category=…` now searches the vector database. `k` is the
+            maximum number of results (default 5), `category` an optional filter applied
+            **during** the search. Each result has `id`, `name`, `category` and `score`.
+          - `POST /api/items` with an item in the same format as `data/items.json` embeds it and
+            **upserts** it: a new id is added, an existing id is replaced.
+          - `DELETE /api/items/<id>` removes the item from the index (`200` or `204`).
 
-          New and deleted documents must show up in search right away.
+          Keep the threshold from the previous course for queries without a filter.
         config:
           snippets:
-            - filename: intranet.json
+            - filename: POST /api/items
               language: json
               code: |
-                [
-                  { "id": "fin-01", "category": "finance", "text": "Expense claims must be submitted within 30 days with a photo of the receipt. Claims over 250 euros need manager approval." },
-                  { "id": "fin-02", "category": "finance", "text": "Supplier invoices are paid on the 15th and on the last working day of each month." },
-                  { "id": "fin-03", "category": "finance", "text": "Each team has a quarterly budget. Overspending needs sign-off from the finance controller." },
-                  { "id": "fin-04", "category": "finance", "text": "Salaries are transferred on the 25th. If that falls on a weekend, payment happens the Friday before." },
-                  { "id": "hr-01", "category": "hr", "text": "Full-time employees get 27 vacation days per year, plus public holidays." },
-                  { "id": "hr-02", "category": "hr", "text": "Parental leave is 16 weeks, fully paid, for every parent." },
-                  { "id": "hr-03", "category": "hr", "text": "If you are ill, message your manager before 9:00 and register it in the HR portal." },
-                  { "id": "hr-04", "category": "hr", "text": "Performance conversations happen twice a year, in April and October." },
-                  { "id": "it-01", "category": "it", "text": "Forgot your password? Use the self-service reset with your authenticator app." },
-                  { "id": "it-02", "category": "it", "text": "Laptops are replaced every three years. Bring broken hardware to the service desk on floor 2." },
-                  { "id": "it-03", "category": "it", "text": "Never install software from unknown sources; request tools through the software catalog." },
-                  { "id": "it-04", "category": "it", "text": "A VPN connection is required when you work from public Wi-Fi." },
-                  { "id": "fac-01", "category": "facilities", "text": "Meeting rooms can be booked up to four weeks ahead in the room planner." },
-                  { "id": "fac-02", "category": "facilities", "text": "Heating and air conditioning are controlled centrally; report problems to the facilities team." },
-                  { "id": "fac-03", "category": "facilities", "text": "Bicycle storage is in the basement; open the door with your badge." },
-                  { "id": "fac-04", "category": "facilities", "text": "Lost and found items are kept at the reception desk on the ground floor." }
-                ]
+                {
+                  "id": "{{theme.probes.catalog.item_id}}",
+                  "name": "{{theme.probes.catalog.item_name}}",
+                  "category": "…",
+                  "price": {{theme.probes.catalog.item_price}},
+                  "description": "…",
+                  "tags": ["…"]
+                }
 
       - id: search-api
         type: service_check
-        title: Run the search checks
-        estimated_minutes: 35
+        title: Run the vector database checks
+        estimated_minutes: 30
         body: |
           The platform runs hidden checks in order:
 
-          1. Meaning-based queries, such as **"money"**, which should bring up finance documents.
-          2. Filtering by category and respecting `k`.
-          3. Adding a brand-new document with a random id, finding it by meaning, deleting it,
-             and confirming it's gone.
+          1. A search with a category filter, and a search that respects `k`.
+          2. Adding a brand-new {{theme.item}} with a random id, finding it by meaning, changing
+             its description and finding it by the new meaning.
+          3. Deleting it and confirming it's gone.
 
-          Everything except the meaning checks must pass, and at least 75% of those.
+          Everything except the meaning checks must pass, and at least two thirds of those.
         help: |
-          If "money" doesn't rank finance first, have the learner print the raw scores and check
-          they use the same model for documents and queries and the right distance metric (with a
-          distance, smaller is closer, so convert it to a similarity). If the category filter
-          returns other categories, they're probably filtering after taking the top k. If the
-          deleted document still appears, check whether the store needs a commit or refresh after
-          writes. Let them find the fix themselves.
+          If the filtered search returns other categories, the learner probably filters after
+          taking the top k. If the new item isn't found, check that the same model and metric are
+          used and whether the store needs a commit or refresh after writes. If the changed item
+          is still found by its old description, the upsert inserted a second record instead of
+          replacing it. Let them find the fix themselves.
         validation:
           timeout_ms: 15000
-          min_pass_ratio: 0.75
+          min_pass_ratio: 0.66
           cases:
-            - id: money
-              label: “money” ranks finance documents highest
-              graded: true
-              request: { path: /search, query: { q: money, k: "5" } }
-              expect:
-                json:
-                  - { pointer: /results, top_k: 1, field: /category, includes: finance }
-                  - { pointer: /results, top_k: 3, field: /category, includes: finance }
-            - id: paid
-              label: “When do I get paid?” finds the salary document
-              graded: true
-              request: { path: /search, query: { q: "When do I get paid?", k: "3" } }
-              expect:
-                json: [{ pointer: /results, field: /id, includes: fin-04 }]
-            - id: time-off
-              label: “time off” ranks HR documents highest
-              graded: true
-              request: { path: /search, query: { q: time off, k: "5" } }
-              expect:
-                json: [{ pointer: /results, top_k: 1, field: /category, includes: hr }]
-            - id: broken-computer
-              label: “my computer won't start” ranks IT documents highest
-              graded: true
-              request: { path: /search, query: { q: "my computer won't start", k: "5" } }
-              expect:
-                json: [{ pointer: /results, top_k: 1, field: /category, includes: it }]
-            - id: cold
-              label: “it's freezing in the office” finds facilities documents
-              graded: true
-              request: { path: /search, query: { q: "it's freezing in the office", k: "5" } }
-              expect:
-                json: [{ pointer: /results, top_k: 1, field: /id, includes: fac-02 }]
             - id: filter
-              label: Category filter returns only that category
-              request: { path: /search, query: { q: money, k: "5", category: hr } }
+              label: A category filter is applied during the search
+              request: { path: /api/search, query: { q: "{{theme.probes.vector.query}}", k: "3", category: "{{theme.probes.vector.category}}" } }
               expect:
                 json:
                   - { pointer: /results, min_items: 1 }
-                  - { pointer: /results, field: /category, all_equal: hr }
+                  - { pointer: /results, field: /category, all_equal: "{{theme.probes.vector.category}}" }
+                  - { pointer: /results, field: /id, excludes: "{{theme.probes.vector.excluded}}" }
+            - id: filtered-meaning
+              label: The filtered search ranks the right {{theme.item}} highest
+              graded: true
+              request: { path: /api/search, query: { q: "{{theme.probes.vector.query}}", k: "3", category: "{{theme.probes.vector.category}}" } }
+              expect:
+                json: [{ pointer: /results, top_k: 1, field: /id, includes: "{{theme.probes.vector.expected}}" }]
             - id: k
               label: Respects k and sorts by score
-              request: { path: /search, query: { q: office, k: "2" } }
+              request: { path: /api/search, query: { q: "{{theme.data.items.1.name}}", k: "2" } }
               expect:
                 json:
                   - { pointer: /results, min_items: 1, max_items: 2 }
                   - { pointer: /results, field: /score, sorted: desc }
-                  - { pointer: "/results/*/text", min_length: 10 }
+                  - { pointer: "/results/*/name", min_length: 2 }
             - id: insert
-              label: Adds a new document
+              label: Adds a new {{theme.item}}
               request:
                 method: POST
-                path: /documents
+                path: /api/items
                 json:
                   id: "probe-{{nonce}}"
-                  category: facilities
-                  text: "Biscuit, the office dog, visits on Fridays. Please don't feed him snacks."
+                  name: Moonlight special
+                  category: "{{theme.probes.catalog.category}}"
+                  price: 1
+                  description: "A limited edition that is only available on nights with a full moon. Ask for it at the counter."
+                  tags: [limited]
               expect: { status: [200, 201] }
             - id: find-new
-              label: Finds the new document by meaning right away
-              request: { path: /search, query: { q: "can I bring a pet to work", k: "3" } }
+              label: Finds the new {{theme.item}} by meaning right away
+              graded: true
+              request: { path: /api/search, query: { q: "something you can only get when the moon is full", k: "3" } }
               expect:
                 json: [{ pointer: /results, field: /id, includes: "probe-{{nonce}}" }]
+            - id: update
+              label: Replaces the {{theme.item}} when it changes
+              request:
+                method: POST
+                path: /api/items
+                json:
+                  id: "probe-{{nonce}}"
+                  name: Snowfall special
+                  category: "{{theme.probes.catalog.category}}"
+                  price: 1
+                  description: "A limited edition that is only available on days when it snows. Ask for it at the counter."
+                  tags: [limited]
+              expect: { status: [200, 201] }
+            - id: find-updated
+              label: Finds it by its new description
+              graded: true
+              request: { path: /api/search, query: { q: "something that only exists when it is snowing", k: "3" } }
+              expect:
+                json: [{ pointer: /results, field: /id, includes: "probe-{{nonce}}" }]
+            - id: single-record
+              label: Keeps one record per id after an update
+              request: { path: /api/search, query: { q: "limited edition special, ask at the counter", k: "10" } }
+              expect:
+                json:
+                  - { pointer: /results, field: /id, includes: "probe-{{nonce}}" }
+                  - { pointer: "/results/*/name", not_contains_any: [Moonlight] }
             - id: delete
-              label: Deletes the document
-              request: { method: DELETE, path: "/documents/probe-{{nonce}}" }
+              label: Deletes the {{theme.item}}
+              request: { method: DELETE, path: "/api/items/probe-{{nonce}}" }
               expect: { status: [200, 204] }
             - id: gone
-              label: Deleted documents no longer appear
-              request: { path: /search, query: { q: "can I bring a pet to work", k: "5" } }
+              label: Deleted items no longer appear
+              request: { path: /api/search, query: { q: "something that only exists when it is snowing", k: "5" } }
               expect:
                 json: [{ pointer: /results, field: /id, excludes: "probe-{{nonce}}" }]
 
@@ -286,7 +305,7 @@ sections:
         optional: true
         estimated_minutes: 4
         config:
-          prompt: A better embedding model is released. Describe how you would switch to it without downtime or mixing vectors.
+          prompt: A better embedding model is released. Describe how you would switch the search of {{theme.data.site.name}} to it without downtime or mixing vectors.
         validation:
           min_words: 30
           required_concepts:
@@ -297,5 +316,5 @@ sections:
         title: Your search scales
         depends_on: [search-api]
         body: |
-          You can store, filter and maintain vectors. Next: the RAG course uses retrieval like this
-          to ground a model's answers in your own documents.
+          The search of {{theme.data.site.name}} now runs on a vector database that stays in sync.
+          Next, your site learns to read images.

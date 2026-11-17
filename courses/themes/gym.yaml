@@ -1,0 +1,41 @@
+id: gym
+order: 7
+icon: dumbbell
+name: { en: Gym, nl: Sportschool }
+tagline: { en: "Classes, memberships and personal training", nl: "Lessen, abonnementen en personal training" }
+vars:
+  en: { site_kind: gym website, business: gym, item: class, items: classes and memberships, search_example: exercise that is easy on painful knees }
+  nl: { site_kind: sportschoolwebsite, business: sportschool, item: les, items: lessen en abonnementen, search_example: sporten met pijnlijke knieën }
+data:
+  site: { name: Kracht, city: Eindhoven }
+  items:
+    - { id: yoga-flow, name: Yoga flow, category: class, price: 12, description: "Calm yoga class with breathing and stretching to relax body and mind.", tags: [relaxing, flexibility] }
+    - { id: spinning, name: Spinning, category: class, price: 12, description: "High-energy indoor cycling class with loud music and a coach on stage.", tags: [cardio, intense] }
+    - { id: bootcamp, name: Outdoor bootcamp, category: class, price: 14, description: "Circuit training in the park, in all weather.", tags: [outdoor, strength] }
+    - { id: pilates, name: Pilates, category: class, price: 13, description: "Slow, controlled exercises for core strength and good posture.", tags: [core, posture] }
+    - { id: boxing, name: Boxing, category: class, price: 14, description: "Learn to punch, defend and improve your footwork with gloves and pads.", tags: [combat, cardio] }
+    - { id: aqua-fit, name: Aqua fit, category: class, price: 11, description: "Workout in the swimming pool. The water makes it gentle on joints and knees.", tags: [low impact, pool] }
+    - { id: senior-fit, name: Senior fit, category: class, price: 9, description: "Strength and balance class for people over 65, at a comfortable pace.", tags: [seniors, balance] }
+    - { id: kids-judo, name: Kids' judo, category: class, price: 10, description: "Judo for boys and girls aged 6 to 12: falling safely, discipline and fun.", tags: [children, martial arts] }
+    - { id: basic-membership, name: Basic membership, category: membership, price: 25, description: "Monthly access to the gym floor during off-peak hours.", tags: [monthly] }
+    - { id: unlimited-membership, name: Unlimited membership, category: membership, price: 49, description: "Monthly access to the gym floor at any time, plus all group classes.", tags: [monthly, all classes] }
+    - { id: personal-training, name: Personal training, category: training, price: 60, description: "One-on-one session with a trainer and a plan tailored to your goals.", tags: [one-on-one] }
+    - { id: physio-check, name: Physio check, category: training, price: 45, description: "Session with a physiotherapist for injuries or pain before you start training.", tags: [injury, health] }
+  pages:
+    - { id: about, title: About Kracht, body: "Kracht is a gym at Strijp-S in Eindhoven. We are open Monday to Friday from 6:00 to 23:00, and on Saturday and Sunday from 8:00 to 20:00." }
+    - { id: memberships, title: Memberships, body: "Memberships are paid monthly and can be cancelled with one month's notice. Your first week is free when you sign up." }
+    - { id: classes, title: Booking classes, body: "Book classes in the app up to 7 days in advance. Cancel at least 2 hours before the class starts, otherwise you lose the credit." }
+    - { id: rules, title: House rules, body: "Bring a towel to every workout. Lockers can be used with your own padlock. Outdoor shoes are not allowed on the gym floor." }
+probes:
+  catalog: { count: 12, item_id: spinning, item_name: Spinning, category: membership, category_ids: [basic-membership, unlimited-membership], item_price: 12, price_mentions: ["12"] }
+  search:
+    dutch: { query: sporten met pijnlijke knieën, expected: aqua-fit }
+    paraphrase: { query: learn to throw a punch and move my feet better, expected: boxing }
+    need: { query: exercise for my 70-year-old father, expected: senior-fit }
+    situation: { query: a sweaty workout on a bike with loud music, expected: spinning }
+  vector: { query: something for my son, category: class, expected: kids-judo, excluded: personal-training }
+  rag:
+    fact: { question: "What time do you open on weekdays?", answer_any: ["6:00", "6.00", "6 am", "6am", "06:00", six, zes], source: about }
+    policy: { question: "What is the notice period when I cancel my membership?", answer_any: [month, maand], source: memberships }
+    detail: { question: "How late can I cancel a class booking?", answer_any: [2 hours, two hours, 2 uur, twee uur], source: classes }
+    unanswerable: { question: "Do you have a sauna?" }

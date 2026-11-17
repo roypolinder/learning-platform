@@ -1,7 +1,7 @@
 //! Step types owned by the engine itself. They need no integration, only the
 //! learner's acknowledgement or state the engine already holds.
 
-use lp_core::{CompletionStrategy, StepCategory, StepTypeSpec, parse_config};
+use lp_core::{CompletionStrategy, Diagram, SlotRule, StepCategory, StepTypeSpec, parse_config};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -10,6 +10,7 @@ use crate::definition::StepDefinition;
 pub const REUSABLE_SECTION: &str = "reusable_section";
 pub const CONDITIONAL: &str = "conditional";
 pub const PREREQUISITE: &str = "prerequisite";
+pub const PROJECT_SETUP: &str = "project_setup";
 
 const SPECS: &[StepTypeSpec] = &[
     StepTypeSpec::new(
@@ -19,10 +20,10 @@ const SPECS: &[StepTypeSpec] = &[
         "Markdown explanation the learner reads.",
     ),
     StepTypeSpec::new(
-        "interactive_content",
+        "diagram",
         StepCategory::Content,
         CompletionStrategy::Acknowledge,
-        "Content split into panels the learner steps through.",
+        "Boxes-and-arrows diagram; learners can select a node for its explanation.",
     ),
     StepTypeSpec::new(
         "video",
@@ -59,6 +60,12 @@ const SPECS: &[StepTypeSpec] = &[
         StepCategory::Workflow,
         CompletionStrategy::Derived,
         "Completes once the learner has finished the referenced courses.",
+    ),
+    StepTypeSpec::new(
+        PROJECT_SETUP,
+        StepCategory::Workflow,
+        CompletionStrategy::Derived,
+        "The learner chooses the website they build throughout the track. Completes once chosen.",
     ),
     StepTypeSpec::new(
         "manual_completion",
@@ -110,20 +117,6 @@ pub struct ReusableSectionConfig {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct InteractiveContentConfig {
-    panels: Vec<Panel>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[allow(dead_code)]
-struct Panel {
-    title: String,
-    body: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 #[allow(dead_code)]
 struct VideoConfig {
     url: String,
@@ -162,14 +155,14 @@ struct InstructionsConfig {
 pub fn validate(step: &StepDefinition) -> Vec<String> {
     let result = match step.step_type.as_str() {
         "explanation" => require_body(step),
-        "interactive_content" => parse_config::<InteractiveContentConfig>("config", &step.config)
-            .and_then(|config| {
-                if config.panels.is_empty() {
-                    Err(vec!["config.panels must not be empty".into()])
-                } else {
-                    Ok(())
-                }
-            }),
+        "diagram" => parse_config::<Diagram>("config", &step.config).and_then(|diagram| {
+            let issues = diagram.check(SlotRule::Forbidden);
+            if issues.is_empty() {
+                Ok(())
+            } else {
+                Err(issues)
+            }
+        }),
         "video" => parse_config::<VideoConfig>("config", &step.config).and_then(|config| {
             if config.url.starts_with("https://") {
                 Ok(())
@@ -208,7 +201,7 @@ pub fn validate(step: &StepDefinition) -> Vec<String> {
                 Ok(())
             }
         }),
-        "manual_completion" | "automatic_completion" => {
+        "manual_completion" | "automatic_completion" | PROJECT_SETUP => {
             parse_config::<InstructionsConfig>("config", &step.config).map(|_| ())
         }
         _ => Ok(()),

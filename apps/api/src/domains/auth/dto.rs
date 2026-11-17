@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use lp_course_engine::Locale;
+
 use crate::domains::users::dto::UserDto;
 
 #[derive(Debug, Deserialize)]
@@ -8,6 +10,8 @@ pub struct RegisterRequest {
     pub email: String,
     pub password: String,
     pub display_name: String,
+    #[serde(default)]
+    pub locale: Locale,
 }
 
 #[derive(Debug, Deserialize)]

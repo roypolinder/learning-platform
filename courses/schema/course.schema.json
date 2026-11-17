@@ -15,7 +15,7 @@
     "category": { "type": "string", "minLength": 1 },
     "difficulty": { "enum": ["beginner", "intermediate", "advanced"] },
     "estimated_minutes": { "type": "integer", "minimum": 1 },
-    "order": { "type": "integer", "minimum": 0, "description": "Position within its difficulty level in the catalog. Lower comes first." },
+    "order": { "type": "integer", "minimum": 0, "description": "Position in the course track. Lower comes first." },
     "help": { "type": "string", "description": "Coaching notes added to every step's help prompt." },
     "tags": { "type": "array", "items": { "type": "string" } },
     "objectives": { "type": "array", "items": { "type": "string" } },
@@ -30,6 +30,24 @@
           "course": { "type": "string", "description": "Id of a platform course, if applicable." }
         }
       }
+    },
+    "glossary": {
+      "type": "array",
+      "description": "Key terms shown in the learner's glossary sidebar. Terms stay English in every language.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["term", "definition"],
+        "properties": {
+          "term": { "type": "string", "minLength": 1 },
+          "definition": { "type": "string", "minLength": 1, "description": "Markdown." }
+        }
+      }
+    },
+    "translations": {
+      "type": "object",
+      "description": "Text overlays per language. Course files keep them in locales/<lang>/<course id>.yaml instead.",
+      "propertyNames": { "enum": ["nl"] }
     },
     "extensions": { "type": "array", "items": { "$ref": "#/$defs/extensionId" }, "description": "Extensions the course relies on." },
     "shared_sections": {
@@ -72,12 +90,12 @@
     "extensionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]*$" },
     "stepType": {
       "enum": [
-        "explanation", "interactive_content", "video", "code_example",
-        "quiz", "multiple_choice", "free_text", "interactive_exercise",
+        "explanation", "diagram", "video", "code_example",
+        "quiz", "multiple_choice", "free_text", "interactive_exercise", "diagram_exercise",
         "external_task", "mcp_connection_check", "http_endpoint_check", "git_repository_check",
         "service_check", "mcp_server_check",
         "filesystem_validation", "configuration_validation", "extension_validation",
-        "conditional", "prerequisite", "manual_completion", "automatic_completion", "reusable_section"
+        "conditional", "prerequisite", "project_setup", "manual_completion", "automatic_completion", "reusable_section"
       ]
     },
     "step": {

@@ -1,0 +1,171 @@
+# Nederlandse vertaling van courses/project-setup.yaml. Alleen tekst; vaktermen blijven Engels.
+title: Start je project
+summary: Kies de website die je in het hele traject bouwt, zet een leeg project op en maak je tools klaar.
+description: |
+  Dit traject is geen verzameling losse oefeningen. Je bouwt **één website**, en elke cursus
+  voegt er een onderdeel aan toe: een eerste pagina, een catalogus-API, tool calling, semantic
+  search, een vector database, antwoorden uit je eigen content, een MCP server en AI agents.
+
+  In deze eerste cursus kies je wat voor website je bouwt, kies je de programmeertaal die je
+  wilt gebruiken en maak je een leeg project aan met Git. Er wordt nog niets automatisch
+  gecontroleerd: in de volgende cursus koppel je je AI agent aan het platform.
+category: Aan de slag
+objectives:
+  - Uitleggen hoe de cursussen in dit traject op één project voortbouwen
+  - Een websitethema en een programmeertaal kiezen voor het hele traject
+  - Een leeg projectmap aanmaken met versiebeheer via Git
+glossary:
+  Project: De website die je in het hele traject bouwt. Elke cursus voegt er een onderdeel aan toe.
+  Seed data: De startdata van je website, zoals de catalogus met {{theme.items}}. De verborgen checks in latere cursussen verwachten precies deze data.
+  Stack: De programmeertaal en tools waarmee je bouwt, bijvoorbeeld JavaScript op Node.js.
+  Node.js: Een runtime waarmee je JavaScript buiten de browser draait, bijvoorbeeld als webserver.
+  npm: De package manager van Node.js. `npm init` maakt een `package.json`; met `npm install` voeg je libraries toe.
+  Git: Versiebeheer. Elke commit is een momentopname van je project waar je naar terug kunt.
+  Repository: Een map waarvan Git de geschiedenis bijhoudt. `git init` maakt van een map een repository.
+  Hidden check: Een test die het platform naar je eigen site stuurt. Je ziet wát er gecontroleerd wordt, niet de precieze verwachte antwoorden.
+sections:
+  your-project:
+    title: Je project
+    steps:
+      how-it-works:
+        title: Eén website, cursus voor cursus gebouwd
+        body: |
+          De meeste AI-tutorials geven je voor elk onderwerp een los speelgoedvoorbeeld. Hier
+          bouw je één echte website die je steeds verder verbetert. Zo landt elk nieuw concept op
+          iets wat je al begrijpt.
+
+          Het traject ziet er ongeveer zo uit:
+
+          1. **De basis:** zet je project op, koppel je AI coding agent aan het platform, leer
+             je agent de afspraken van je project met een skill, en bouw een eerste pagina met
+             een kleine catalogus-API.
+          2. **Maak het slim:** laat een model je tools aanroepen, voeg zoeken toe dat begrijpt
+             wat bezoekers *bedoelen*, sla embeddings op in een vector database, lees afbeeldingen
+             en beantwoord vragen uit de teksten van je eigen site.
+          3. **Verder gaan:** stel je site beschikbaar als MCP server en bouw er agents en
+             workflows bovenop.
+
+          Het platform controleert je werk door requests te sturen naar de site die **jij**
+          draait, vanuit je eigen browser. Je code hoeft nooit openbaar te zijn en `localhost`
+          werkt prima.
+      big-picture:
+        title: Wat je aan het eind hebt
+        body: |
+          Hier werkt je project naartoe. Kies een vak om te lezen wat het doet; elk onderdeel
+          krijgt een eigen cursus.
+        config:
+          nodes:
+            - { id: visitor, label: Bezoeker, detail: "Iemand die je website gebruikt en bijvoorbeeld zoekt op {{theme.search_example}}." }
+            - { id: site, label: Je website, detail: "De pagina's en de API die je bouwt, in de taal die je kiest." }
+            - { id: model, label: AI-modellen, detail: "Taal- en embedding-modellen die je site aanroept, bijvoorbeeld om een zoekvraag te begrijpen of een vraag te beantwoorden." }
+            - { id: data, label: Catalogus & sitetekst, detail: "Je seed data: de {{theme.items}} en pagina's van je site. Later staan ze ook in een vector database." }
+            - { id: agent, label: Je AI agent, detail: "De coding agent in je editor. Die coacht je en meldt je voortgang via MCP aan het platform." }
+            - { id: platform, label: Learning platform, detail: "Geeft je agent via MCP je huidige stap en voert verborgen checks uit op je site." }
+          edges:
+            - { from: visitor, to: site, label: gebruikt }
+            - { from: site, to: model, label: roept aan }
+            - { from: site, to: data, label: leest }
+            - { from: agent, to: platform, label: MCP }
+            - { from: platform, to: site, label: controleert }
+          caption: Alles in de middelste kolom bouw je zelf, cursus voor cursus.
+      choose:
+        title: Kies je website
+        body: |
+          Kies een website waar je graag aan werkt. Elk thema heeft zijn eigen seed data: een
+          catalogus met ongeveer twaalf producten, diensten of aanbiedingen, en een paar pagina's
+          sitetekst zoals openingstijden en voorwaarden. De verborgen checks in latere cursussen
+          zijn op die data geschreven.
+
+          Je kiest ook de taal waarin je programmeert. **We raden JavaScript met Node.js aan**:
+          daarvoor heb je de minste setup nodig, en elke cursus laat een JavaScript-route zien.
+          De checks kijken alleen naar wat je site doet, dus andere talen werken ook.
+      your-choice:
+        title: Maak kennis met {{theme.data.site.name}}
+        body: |
+          Je bouwt de **{{theme.site_kind}}** voor **{{theme.data.site.name}}**, een
+          {{theme.business}} in {{theme.data.site.city}}.
+
+          De seed data bestaat uit twee delen:
+
+          - **De catalogus:** {{theme.data.items.0.name}}, {{theme.data.items.1.name}},
+            {{theme.data.items.2.name}} en meer. Elk item heeft een `id`, een `name`, een
+            `category`, een `price`, een `description` en een paar `tags`.
+          - **De sitepagina's:** korte teksten zoals "{{theme.data.pages.0.title}}" en
+            "{{theme.data.pages.1.title}}". Later bouw je een assistent die vragen van bezoekers
+            beantwoordt uit precies deze teksten.
+
+          De data is Engelstalig, zodat iedereen met hetzelfde thema dezelfde checks krijgt. Je
+          hoeft nu nog niets over te nemen: in de volgende cursus haalt je AI agent de data
+          rechtstreeks bij het platform op met de tool `get_project`.
+  setup:
+    title: Je werkplek inrichten
+    steps:
+      tools:
+        title: Installeer je tools
+        body: |
+          Je hebt vier dingen nodig. Sla over wat je al hebt.
+
+          1. **Een code-editor met een AI coding agent.** De cursussen gebruiken VS Code met
+             GitHub Copilot in agent mode, maar elke agent die MCP ondersteunt werkt.
+          2. **Node.js (LTS-versie)** via nodejs.org. Controleer in een terminal met
+             `node --version` en `npm --version`. Koos je een andere taal? Installeer dan die
+             runtime, bijvoorbeeld Python 3.12+.
+          3. **Git.** Controleer met `git --version`. Vertel Git één keer wie je bent:
+             `git config --global user.name "Je Naam"` en
+             `git config --global user.email jij@example.com`.
+          4. **Een API key van een model provider.** Pas nodig in de cursus tool calling, maar
+             handig om alvast te regelen. Elke provider met chat- en embedding-modellen werkt,
+             ook een model dat je lokaal draait.
+      create-project:
+        title: Maak een leeg project
+        body: |
+          Open een terminal in de map waar je je code bewaart en maak het project aan. De naam
+          van de map mag je zelf kiezen; deze past bij je thema.
+
+          Open de map daarna in je editor. Deze map is je werkplek voor de rest van het traject.
+        config:
+          snippets:
+            - caption: "In `.env` komen later je API keys; dat bestand mag nooit gecommit worden."
+            - code: |
+                # {{theme.data.site.name}}
+
+                De {{theme.site_kind}} die ik bouw in het traject AI-development.
+            - caption: Je eerste commit. Commit opnieuw na elke cursusstap die werkt.
+      project-ready:
+        title: Controleer je setup
+        body: |
+          Markeer deze stap als klaar wanneer:
+
+          - de projectmap bestaat en geopend is in je editor,
+          - er een `README.md` is en een `.gitignore` die `.env` negeert,
+          - `git log` je eerste commit laat zien.
+      check:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: checks
+              prompt: Hoe controleert het platform de website die je bouwt?
+              explanation: Je browser stuurt de testrequests van het platform naar je eigen site, dus het werkt ook op localhost en niets hoeft openbaar te zijn.
+              options:
+                - { id: upload, text: Je uploadt je code en het platform voert die uit }
+                - { id: browser, text: Je browser stuurt testrequests naar de site die je zelf draait }
+                - { id: screenshot, text: Je stuurt screenshots van je site }
+            - id: env
+              prompt: Waarom staat `.env` in `.gitignore`?
+              explanation: API keys zijn geheimen. Door `.env` buiten Git te houden komen ze niet in je geschiedenis of op GitHub terecht.
+              options:
+                - { id: secrets, text: Zodat API keys in .env nooit gecommit worden }
+                - { id: speed, text: Dan is Git sneller }
+                - { id: required, text: Node.js start niet zonder }
+            - id: seed
+              prompt: Waarom krijgen alle deelnemers met hetzelfde thema dezelfde seed data?
+              explanation: De verborgen checks zijn op die data geschreven, bijvoorbeeld "deze zoekopdracht moet dit item vinden".
+              options:
+                - { id: checks, text: De verborgen checks verwachten precies die data }
+                - { id: storage, text: Om opslag op het platform te besparen }
+                - { id: random, text: Dat is willekeurig; iedereen krijgt andere data }
+      finish:
+        title: Je project staat klaar
+        body: |
+          Je lege project staat klaar. In de volgende cursus koppel je je AI agent aan het
+          platform, en die haalt de seed data voor {{theme.data.site.name}} op.

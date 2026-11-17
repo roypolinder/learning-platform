@@ -31,7 +31,7 @@ async fn health_and_catalog_are_public() {
     assert_eq!(list["items"][0]["id"], "mcp-first-connection");
     assert_eq!(list["items"][1]["id"], "build-mcp-server");
 
-    // The catalog is a learning path: easier courses first, then by `order`.
+    // The catalog is one track, ordered by `order`.
     let all: serde_json::Value = client
         .get(app.url("/api/v1/courses?per_page=100"))
         .send()
@@ -40,18 +40,27 @@ async fn health_and_catalog_are_public() {
         .json()
         .await
         .unwrap();
-    let rank = |item: &serde_json::Value| match item["difficulty"].as_str() {
-        Some("beginner") => 0,
-        Some("intermediate") => 1,
-        _ => 2,
-    };
     let items = all["items"].as_array().unwrap();
     assert!(
         items
             .windows(2)
-            .all(|pair| rank(&pair[0]) <= rank(&pair[1]))
+            .all(|pair| pair[0]["order"].as_u64() <= pair[1]["order"].as_u64())
     );
-    assert_eq!(items[0]["id"], "mcp-first-connection");
+    assert_eq!(items[0]["id"], "project-setup");
+    assert_eq!(items[1]["id"], "mcp-first-connection");
+
+    // Visitors who aren't signed in get their browser's language and neutral wording.
+    let dutch: serde_json::Value = client
+        .get(app.url("/api/v1/courses/project-setup"))
+        .header("accept-language", "nl-NL,nl;q=0.9,en;q=0.5")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(dutch["course"]["title"], "Start je project");
+    assert!(!dutch.to_string().contains("{{theme."));
 
     let detail: serde_json::Value = client
         .get(app.url("/api/v1/courses/mcp-first-connection"))
@@ -94,7 +103,7 @@ async fn learner_progresses_through_generic_steps() {
         step_status(&started["progress"], "what-is-mcp"),
         "available"
     );
-    assert_eq!(step_status(&started["progress"], "primitives"), "locked");
+    assert_eq!(step_status(&started["progress"], "roles"), "locked");
 
     // Starting again resumes the same session.
     let resumed = ada
@@ -109,11 +118,29 @@ async fn learner_progresses_through_generic_steps() {
         .post_ok(&format!("{base}/steps/what-is-mcp/complete"), json!({}))
         .await;
     assert_eq!(step_status(&done["progress"], "what-is-mcp"), "completed");
-    assert_eq!(step_status(&done["progress"], "primitives"), "available");
-
-    // Quizzes cannot be self-completed.
+    assert_eq!(step_status(&done["progress"], "roles"), "available");
+    ada.post_ok(&format!("{base}/steps/roles/complete"), json!({}))
+        .await;
     ada.post_ok(&format!("{base}/steps/primitives/complete"), json!({}))
         .await;
+
+    // Diagram exercises are graded per box.
+    let misplaced = ada
+        .post_ok(
+            &format!("{base}/steps/place-roles/submissions"),
+            json!({ "payload": { "slots": { "host": "client", "client": "host", "server": "server" } } }),
+        )
+        .await;
+    assert_eq!(misplaced["outcome"]["status"], "failed");
+    let placed = ada
+        .post_ok(
+            &format!("{base}/steps/place-roles/submissions"),
+            json!({ "payload": { "slots": { "host": "host", "client": "client", "server": "server" } } }),
+        )
+        .await;
+    assert_eq!(placed["outcome"]["status"], "passed");
+
+    // Quizzes cannot be self-completed.
     let refused = ada
         .post(&format!("{base}/steps/check-basics/complete"), json!({}))
         .await;
@@ -131,18 +158,17 @@ async fn learner_progresses_through_generic_steps() {
     let right = ada
         .post_ok(
             &format!("{base}/steps/check-basics/submissions"),
-            json!({ "payload": { "answers": { "transport": ["http"], "control": ["tools"], "roles": ["host"], "authorization": ["challenge"] } } }),
+            json!({ "payload": { "answers": { "transport": ["http"], "control": ["tools"], "authorization": ["challenge"] } } }),
         )
         .await;
     assert_eq!(right["outcome"]["status"], "passed");
+    assert_eq!(step_status(&right["progress"], "review-basics"), "skipped");
+    // The practical part waits until the previous course in the track is done.
     assert_eq!(
-        step_status(&right["progress"], "review-primitives"),
-        "skipped"
-    );
-    assert_eq!(
-        step_status(&right["progress"], "config-example"),
+        step_status(&right["progress"], "previous-course"),
         "available"
     );
+    assert_eq!(step_status(&right["progress"], "config-example"), "locked");
 
     let invalid = ada
         .post(
@@ -154,8 +180,8 @@ async fn learner_progresses_through_generic_steps() {
 
     // Progress is persisted and survives a fresh read.
     let progress = ada.json(&format!("{base}/progress")).await;
-    assert_eq!(progress["completed_required"], 4);
-    assert_eq!(progress["current_step_id"], "config-example");
+    assert_eq!(progress["completed_required"], 6);
+    assert_eq!(progress["current_step_id"], "previous-course");
     let events = ada.json(&format!("{base}/events")).await;
     assert!(
         events
@@ -169,7 +195,7 @@ async fn learner_progresses_through_generic_steps() {
     assert_eq!(overview["stats"]["active_courses"], 1);
     assert_eq!(
         overview["sessions"][0]["current_step"]["id"],
-        "config-example"
+        "previous-course"
     );
     app.cleanup().await;
 }
@@ -454,4 +480,138 @@ async fn traffic_report_is_for_super_admins_only() {
         StatusCode::NOT_FOUND
     );
     unconfigured.cleanup().await;
+}
+
+#[tokio::test]
+async fn projects_personalize_courses_and_cannot_change() {
+    let app = TestApp::spawn().await;
+    let ada = app.user("ada").await;
+
+    let themes = ada.json("/api/v1/themes").await;
+    assert_eq!(themes["items"].as_array().unwrap().len(), 10);
+    assert!(ada.json("/api/v1/project").await["project"].is_null());
+
+    let unknown = ada
+        .post(
+            "/api/v1/project",
+            json!({ "theme_id": "spaceship", "stack": "javascript" }),
+        )
+        .await;
+    assert_eq!(unknown.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    let created = ada
+        .post_ok(
+            "/api/v1/project",
+            json!({ "theme_id": "bike-rental", "stack": "javascript" }),
+        )
+        .await;
+    assert_eq!(created["project"]["theme_id"], "bike-rental");
+    let again = ada
+        .post(
+            "/api/v1/project",
+            json!({ "theme_id": "bakery", "stack": "python" }),
+        )
+        .await;
+    assert_eq!(again.status(), StatusCode::CONFLICT);
+
+    let data = ada.json("/api/v1/project/data").await;
+    assert_eq!(data["items"].as_array().unwrap().len(), 12);
+
+    // Course content now refers to the learner's own site, in their language.
+    let detail = ada.json("/api/v1/courses/semantic-matching").await;
+    assert!(
+        detail["course"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Velora Bikes")
+    );
+    let updated = ada
+        .send(
+            reqwest::Method::PATCH,
+            "/api/v1/users/me",
+            Some(json!({ "locale": "nl" })),
+        )
+        .await;
+    assert_eq!(updated.status(), StatusCode::OK);
+    let dutch = ada.json("/api/v1/courses/project-setup").await;
+    assert_eq!(dutch["course"]["title"], "Start je project");
+    let step_titles = dutch.to_string();
+    assert!(step_titles.contains("Maak kennis met Velora Bikes"));
+
+    // Hidden expectations never reach the learner, even when filled in for their theme.
+    let started = ada
+        .post_ok("/api/v1/courses/semantic-matching/sessions", json!({}))
+        .await;
+    let session = ada
+        .json(&format!(
+            "/api/v1/sessions/{}",
+            started["session"]["id"].as_str().unwrap()
+        ))
+        .await
+        .to_string();
+    assert!(session.contains("fiets voor moeder"), "probe query is sent");
+    assert!(!session.contains("\"expect\""), "expectations leaked");
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn notes_are_private_per_learner() {
+    let app = TestApp::spawn().await;
+    let ada = app.user("ada").await;
+    let eve = app.user("eve").await;
+
+    let note = ada
+        .post_ok(
+            "/api/v1/notes",
+            json!({ "course": "semantic-matching", "body": "Cosine similarity: 1 means same direction" }),
+        )
+        .await;
+    let id = note["id"].as_str().unwrap();
+    ada.post_ok(
+        "/api/v1/notes",
+        json!({ "course": "rag-fundamentals", "body": "Cite page ids" }),
+    )
+    .await;
+    let missing_course = ada
+        .post("/api/v1/notes", json!({ "course": "nope", "body": "x" }))
+        .await;
+    assert_eq!(missing_course.status(), StatusCode::NOT_FOUND);
+
+    let one = ada.json("/api/v1/notes?course=semantic-matching").await;
+    assert_eq!(one["items"].as_array().unwrap().len(), 1);
+    let all = ada.json("/api/v1/notes").await;
+    assert_eq!(all["items"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        eve.json("/api/v1/notes").await["items"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
+
+    let foreign = eve
+        .send(
+            reqwest::Method::PATCH,
+            &format!("/api/v1/notes/{id}"),
+            Some(json!({ "body": "mine now" })),
+        )
+        .await;
+    assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+    let edited = ada
+        .send(
+            reqwest::Method::PATCH,
+            &format!("/api/v1/notes/{id}"),
+            Some(json!({ "body": "Cosine: 1 = same, 0 = unrelated" })),
+        )
+        .await;
+    assert_eq!(edited.status(), StatusCode::OK);
+    let deleted = ada
+        .send(
+            reqwest::Method::DELETE,
+            &format!("/api/v1/notes/{id}"),
+            None,
+        )
+        .await;
+    assert_eq!(deleted.status(), StatusCode::NO_CONTENT);
+    app.cleanup().await;
 }

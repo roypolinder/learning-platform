@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use lp_course_engine::Locale;
+
 use super::domain::User;
 use crate::http::auth::CurrentUser;
 
@@ -11,6 +13,7 @@ pub struct UserDto {
     pub email: String,
     pub display_name: String,
     pub role: String,
+    pub locale: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<DateTime<Utc>>,
 }
@@ -22,6 +25,7 @@ impl From<User> for UserDto {
             email: user.email,
             display_name: user.display_name,
             role: user.role,
+            locale: user.locale,
             created_at: Some(user.created_at),
         }
     }
@@ -34,6 +38,7 @@ impl From<&CurrentUser> for UserDto {
             email: user.email.clone(),
             display_name: user.display_name.clone(),
             role: user.role.clone(),
+            locale: user.locale.clone(),
             created_at: None,
         }
     }
@@ -42,5 +47,8 @@ impl From<&CurrentUser> for UserDto {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UpdateProfileRequest {
-    pub display_name: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub locale: Option<Locale>,
 }

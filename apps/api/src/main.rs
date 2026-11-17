@@ -4,7 +4,7 @@ use std::process::ExitCode;
 use lp_api::app::{self, build_engine};
 use lp_api::config::AppConfig;
 use lp_api::db;
-use lp_course_engine::load_directory;
+use lp_course_engine::{CatalogError, check_renders, load_directory, load_themes};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
 
@@ -127,29 +127,46 @@ async fn grant_super_admin(
 
 fn check_courses(config: &AppConfig) -> Result<(), Box<dyn std::error::Error>> {
     let engine = build_engine(config)?;
-    match load_directory(&engine, &config.courses_dir) {
-        Ok(courses) => {
-            for (path, course) in courses {
-                println!(
-                    "ok  {} v{} ({} steps) — {}",
-                    course.id,
-                    course.version,
-                    course.steps.len(),
-                    path.display()
-                );
-            }
-            Ok(())
-        }
-        Err(errors) => {
-            for error in &errors {
-                eprintln!("error  {error}");
-                if let lp_course_engine::CatalogError::Invalid { source, .. } = error {
-                    for issue in &source.issues {
-                        eprintln!("       - {issue}");
-                    }
+    let report = |errors: &[CatalogError]| {
+        for error in errors {
+            eprintln!("error  {error}");
+            if let CatalogError::Invalid { source, .. } = error {
+                for issue in &source.issues {
+                    eprintln!("       - {issue}");
                 }
             }
-            Err(format!("{} course file(s) invalid", errors.len()).into())
         }
+    };
+    let themes = load_themes(&config.courses_dir.join("themes")).map_err(|errors| {
+        report(&errors);
+        format!("{} theme problem(s)", errors.len())
+    })?;
+    let courses = load_directory(&engine, &config.courses_dir).map_err(|errors| {
+        report(&errors);
+        format!("{} course file(s) invalid", errors.len())
+    })?;
+    let render_errors = check_renders(&engine, &courses, &themes);
+    if !render_errors.is_empty() {
+        report(&render_errors);
+        return Err(format!(
+            "{} course(s) do not render for every theme",
+            render_errors.len()
+        )
+        .into());
     }
+    for (path, course) in &courses {
+        println!(
+            "ok  {} v{} ({} steps, {} languages) — {}",
+            course.id,
+            course.version,
+            course.steps.len(),
+            course.definition.translations.len() + 1,
+            path.display()
+        );
+    }
+    println!(
+        "ok  {} themes, every course renders in every language and theme",
+        themes.selectable().len()
+    );
+    Ok(())
 }

@@ -4,7 +4,10 @@
 
 use std::path::Path;
 
-use lp_course_engine::{CourseDefinition, CourseEngine, load_directory};
+use lp_course_engine::{
+    CatalogError, CourseDefinition, CourseEngine, ThemeCatalog, check_renders, load_directory,
+    load_themes,
+};
 use sqlx::PgPool;
 
 use super::catalog::{CourseCatalog, LoadedCourse};
@@ -25,33 +28,46 @@ pub enum SyncError {
     Serialization(#[from] serde_json::Error),
 }
 
+/// Project themes live in `<courses>/themes/`.
+pub fn load_theme_catalog(directory: &Path) -> Result<ThemeCatalog, SyncError> {
+    load_themes(&directory.join("themes")).map_err(|errors| describe(&errors))
+}
+
+/// Human-readable report of course and theme problems, one issue per line.
+pub fn describe(errors: &[CatalogError]) -> SyncError {
+    SyncError::InvalidCourses(
+        errors
+            .iter()
+            .map(|error| match error {
+                CatalogError::Invalid { path, source } => format!(
+                    "{}:\n{}",
+                    path.display(),
+                    source
+                        .issues
+                        .iter()
+                        .map(|issue| format!("  - {issue}"))
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ),
+                other => other.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
 pub async fn sync_courses(
     db: &PgPool,
     engine: &CourseEngine,
+    themes: &ThemeCatalog,
     directory: &Path,
     allow_in_place_edits: bool,
 ) -> Result<CourseCatalog, SyncError> {
-    let courses = load_directory(engine, directory).map_err(|errors| {
-        SyncError::InvalidCourses(
-            errors
-                .iter()
-                .map(|error| match error {
-                    lp_course_engine::CatalogError::Invalid { path, source } => format!(
-                        "{}:\n{}",
-                        path.display(),
-                        source
-                            .issues
-                            .iter()
-                            .map(|issue| format!("  - {issue}"))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    ),
-                    other => other.to_string(),
-                })
-                .collect::<Vec<_>>()
-                .join("\n"),
-        )
-    })?;
+    let courses = load_directory(engine, directory).map_err(|errors| describe(&errors))?;
+    let render_errors = check_renders(engine, &courses, themes);
+    if !render_errors.is_empty() {
+        return Err(describe(&render_errors));
+    }
 
     let mut loaded = Vec::with_capacity(courses.len());
     let mut tx = db.begin().await?;

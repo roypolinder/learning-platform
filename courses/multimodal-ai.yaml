@@ -1,19 +1,21 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: multimodal-ai
-version: 1.0.0
-title: "Multimodal AI: from images to structured data"
-summary: Use a vision-capable model to turn receipt images into validated JSON, and prove it on images you have never seen.
+version: 2.0.0
+title: Multimodal AI
+summary: Let your site read receipt photos with a vision-capable model and turn them into validated JSON, proven on images you have never seen.
 description: |
   Modern models don't just read text. They understand images, documents, audio and video in
   the same request. The most valuable everyday use is turning messy visual input into clean,
   structured data you can trust.
 
-  You will build an extraction service that sends an image to a vision-capable model, asks
-  for output that follows a JSON Schema, validates it and normalizes it. The platform sends it
-  receipts it has never shown you, plus an image that isn't a receipt at all.
+  Every {{theme.business}} drowns in paper receipts from suppliers. You add an expense scanner
+  to the back office of {{theme.data.site.name}}: an endpoint that sends a receipt photo to a
+  vision-capable model, asks for output that follows a JSON Schema, and validates and
+  normalizes it. The platform sends it receipts it has never shown you, plus an image that
+  isn't a receipt at all.
 category: AI foundations
 difficulty: intermediate
-order: 30
+order: 8
 estimated_minutes: 60
 tags: [multimodal, vision, structured-outputs, document-ai, json-schema]
 objectives:
@@ -22,11 +24,29 @@ objectives:
   - Normalize dates, currencies and amounts so downstream code can rely on them
   - Recognize when input is out of scope instead of hallucinating fields
 prerequisites:
-  - title: Tool calling from first principles
-    course: tool-calling-fundamentals
+  - title: Vector databases
+    course: vector-databases
+glossary:
+  - term: Multimodal model
+    definition: A model that understands several kinds of input, such as text, images and audio, in the same request.
+  - term: Vision model
+    definition: A model that can read images. Often the same model you use for chat.
+  - term: Image tokens
+    definition: An image is split into patches that become tokens. Higher resolution means more tokens, so more cost and latency.
+  - term: Structured output
+    definition: Asking the model for output that follows a JSON Schema, often enforced by the provider, so your code can parse it reliably.
+  - term: Data URL
+    definition: A file embedded in text, like `data:image/png;base64,…`. A common way to send an image in a JSON request.
+  - term: Base64
+    definition: A way to write binary data, such as an image, as plain text.
+  - term: Normalization
+    definition: Converting values to one format, such as dates to `YYYY-MM-DD` and amounts to numbers, so other code can rely on them.
+  - term: ISO 8601 / ISO 4217
+    definition: The standard formats for dates (`2026-03-14`) and currency codes (`EUR`, `USD`).
 extensions: [quiz, service]
 help: |
-  The learner uses any vision-capable model (hosted or local). Help them with sending images
+  The learner adds a receipt extraction endpoint to their website project, using any
+  vision-capable model (hosted or local). Help them with sending images
   (data URLs or base64), structured outputs or JSON-schema prompting, validation and
   normalization, and handling non-receipts. Encourage testing with a photo of a receipt
   of their own. Don't write the extraction prompt or the code for them.
@@ -65,29 +85,37 @@ sections:
              validation fails. Never trust extracted values blindly.
 
       - id: risks
-        type: interactive_content
+        type: explanation
         title: Pitfalls specific to visual input
         estimated_minutes: 5
+        body: |
+          - **Hallucinated fields.** Asked for a total, a model may invent one even if the image is
+            a cat. Allow `null` in your schema and add an explicit "is this the expected document
+            type?" field, so the model has an honest way out.
+          - **Ambiguous formats.** Is `03/04/2026` the 3rd of April or March 4th? Does `1.250,00`
+            mean one thousand two hundred fifty? Use context (country, currency) and normalize to
+            one format.
+          - **Prompt injection in images.** Text inside an image is input like any other. A photo
+            saying "ignore your instructions" can steer a model. Keep extraction instructions
+            separate and don't give the extraction step any power to act.
+          - **Privacy.** Receipts, IDs and screenshots contain personal data. Send only what's
+            needed, know where the provider processes data, and redact what you store.
+
+      - id: pipeline
+        type: diagram_exercise
+        title: Build the pipeline
+        estimated_minutes: 3
         config:
-          panels:
-            - title: Hallucinated fields
-              body: |
-                Asked for a total, a model may invent one even if the image is a cat. Allow
-                `null` in your schema and add an explicit "is this the expected document type?"
-                field so the model has an honest way out.
-            - title: Ambiguous formats
-              body: |
-                Is `03/04/2026` the 3rd of April or March 4th? Does `1.250,00` mean one thousand
-                two hundred fifty? Use context (country, currency) and normalize to one format.
-            - title: Prompt injection in images
-              body: |
-                Text inside an image is input like any other. A screenshot saying "ignore your
-                instructions" can steer a model. Keep extraction instructions separate and
-                don't give the extraction step any power to act.
-            - title: Privacy
-              body: |
-                Receipts, IDs and screenshots contain personal data. Send only what's needed,
-                know where the provider processes data, and redact what you store.
+          mode: order
+          prompt: Put the steps of a reliable extraction pipeline in order.
+          chips:
+            - { id: receive, label: Receive the photo as a data URL }
+            - { id: model, label: Send it to a vision model with your JSON Schema }
+            - { id: parse, label: Parse the JSON the model returns }
+            - { id: validate, label: "Validate and normalize: dates, currency codes, numbers" }
+            - { id: respond, label: "Respond, or retry once if validation failed" }
+        validation:
+          order: [receive, model, parse, validate, respond]
 
       - id: check-concepts
         type: quiz
@@ -125,14 +153,20 @@ sections:
                 - { id: ignored, text: "No, models ignore text in images" }
 
   - id: build
-    title: Build the extractor
+    title: Build the receipt scanner
     steps:
+      - id: previous-course
+        type: prerequisite
+        title: Your vector database works
+        config:
+          courses: [vector-databases]
+
       - id: contract
         type: code_example
         title: The extraction contract
         estimated_minutes: 4
         body: |
-          Build an HTTP service with one endpoint, `POST /extract`. It receives
+          Add one endpoint to the server of {{theme.data.site.name}}: `POST /api/receipts/extract`. It receives
           `{"image": "data:image/png;base64,..."}` (PNG or JPEG) and responds with the JSON below.
           Use any vision-capable model.
 
@@ -209,7 +243,7 @@ sections:
               label: Extracts the bakery receipt
               request:
                 method: POST
-                path: /extract
+                path: /api/receipts/extract
                 json: { image: "{{asset:receipt-bakery.png}}" }
               expect:
                 json:
@@ -225,7 +259,7 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /extract
+                path: /api/receipts/extract
                 json: { image: "{{asset:receipt-hardware.png}}" }
               expect:
                 json:
@@ -239,7 +273,7 @@ sections:
               graded: true
               request:
                 method: POST
-                path: /extract
+                path: /api/receipts/extract
                 json: { image: "{{asset:chart-visitors.png}}" }
               expect:
                 json:
@@ -255,7 +289,7 @@ sections:
         optional: true
         estimated_minutes: 3
         config:
-          prompt: Your extractor will process real customer receipts. Name two measures you'd add before going to production and why.
+          prompt: The receipt scanner of {{theme.data.site.name}} will process real receipts. Name two measures you'd add before going to production and why.
         validation:
           min_words: 25
           required_concepts:
@@ -266,5 +300,5 @@ sections:
         title: Your model can see
         depends_on: [extractor]
         body: |
-          You turned pixels into validated data. The RAG course combines models with your own
-          knowledge base.
+          You turned pixels into validated data. Next, {{theme.data.site.name}} gets an assistant
+          that answers visitor questions from the pages of your own site.

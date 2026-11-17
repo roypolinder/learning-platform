@@ -1,0 +1,224 @@
+title: Tool calling
+summary: Geef een model tools voor je eigen catalogus met JSON Schema, voer de tool loop zelf uit en laat het platform beide testen.
+description: |
+  Met tool calling (ook wel function calling) gaat een model van *praten* naar *doen*: het
+  vraagt je code een functie uit te voeren, jij voert die uit en geeft het resultaat terug. Elke
+  moderne model-API, MCP en elke coding agent is op deze loop gebouwd.
+
+  Je geeft een model drie tools voor {{theme.data.site.name}}: een van je {{theme.items}} opzoeken,
+  de catalogus met filters opvragen, en prijzen omrekenen naar andere valuta voor buitenlandse
+  bezoekers. Daarna koppel je een model naar keuze en voeg je een klein chat-endpoint toe aan je
+  site. Het platform roept beide aan met requests die je nog niet gezien hebt.
+category: AI-basis
+objectives:
+  - De tool-calling loop uitleggen en wie wat uitvoert
+  - Tools beschrijven met JSON Schema, zodat een model ze correct gebruikt
+  - Gestructureerde tool-fouten teruggeven waar een model mee verder kan, in plaats van te crashen
+  - Een willekeurig model aan je tools koppelen en voorkomen dat het tools aanroept die het niet nodig heeft
+prerequisites: [Je eerste pagina en catalogus-API]
+glossary:
+  Tool calling: Een model antwoordt met een verzoek om een functie uit te voeren (naam + argumenten) in plaats van tekst. Jouw code voert die uit en geeft het resultaat terug. Ook wel function calling.
+  Tool definition: De naam, description en het JSON Schema van een tool. Dat is alles wat het model over de tool weet.
+  JSON Schema: Een standaard manier om de vorm van JSON te beschrijven, met types, verplichte velden, enums en patterns.
+  Tool loop: Stuur het gesprek en de tools, voer de calls uit die het model vraagt, stuur de resultaten terug en herhaal tot het model met tekst antwoordt.
+  Tool result: Wat je code teruggeeft na het uitvoeren van een tool. Bij problemen een duidelijke foutmelding waar het model iets mee kan.
+  System prompt: Instructies voor het model die de rol en regels vastleggen, verstuurd vóór de berichten van de gebruiker.
+  Prompt injection: Tekst (bijvoorbeeld in een document of bericht) die een model probeert zijn instructies te laten negeren, bijvoorbeeld om tools aan te roepen die het niet mag gebruiken.
+  API key: Een geheim waarmee je je identificeert bij een model provider. Bewaar het in `.env`, nooit in je code.
+sections:
+  concepts:
+    title: Hoe tool calling werkt
+    steps:
+      the-loop:
+        title: De tool-calling loop
+        body: |
+          Een model kan geen code uitvoeren. Wat het *wel* kan, is een gestructureerd verzoek
+          maken: "roep `get_item` aan met `{"item_id": "{{theme.probes.catalog.item_id}}"}`". De
+          loop ziet er zo uit:
+
+          1. Je stuurt het gesprek **plus een lijst tool definitions** naar het model.
+          2. Het model antwoordt met tekst, of met een of meer **tool calls**.
+          3. **Jouw code** controleert de argumenten en voert de functie uit.
+          4. Je voegt het **tool result** toe aan het gesprek en roept het model opnieuw aan.
+          5. Herhaal tot het model met tekst antwoordt (of je een limiet op het aantal stappen
+             bereikt).
+
+          Daar volgen drie dingen uit:
+
+          - **Jij houdt de controle.** Het model stelt alleen voor. Jouw code beslist of een call
+            mag, controleert elk argument en kan het eerst aan een mens vragen.
+          - **Definitions zijn prompts.** De naam, description en parameterbeschrijvingen zijn
+            alles wat het model weet. Vage descriptions leveren verkeerde calls op.
+          - **Fouten zijn informatie.** Een resultaat als `"geen {{theme.item}} met id x-99"` laat
+            het model zichzelf corrigeren of het de bezoeker vertellen. Een HTTP 500 breekt de
+            loop gewoon af.
+      order-the-loop:
+        title: Zet de loop op volgorde
+        config:
+          prompt: "Een bezoeker vraagt: “Wat kost de {{theme.probes.catalog.item_name}}?” Zet op volgorde wat er gebeurt."
+          chips:
+            - { id: send, label: Je code stuurt de vraag en de tool definitions naar het model }
+            - { id: call, label: "Het model antwoordt met een tool call: get_item" }
+            - { id: run, label: Je code controleert de argumenten en voert get_item uit }
+            - { id: result, label: Je code stuurt het tool result terug naar het model }
+            - { id: answer, label: Het model antwoordt de bezoeker met tekst }
+      good-definitions:
+        title: Goede tool definitions ontwerpen
+        body: |
+          **Naam en description.** Gebruik duidelijke namen van werkwoord plus zelfstandig
+          naamwoord (`get_item`, niet `items2`). De description zegt **wat** de tool doet,
+          **wanneer** je hem gebruikt en wat hij teruggeeft: *"Look up one {{theme.item}} of
+          {{theme.data.site.name}} by its id. Use when the visitor asks about a specific
+          {{theme.item}}, its price or its details."* Descriptions schrijf je meestal in het
+          Engels; modellen zijn daar het best op getraind.
+
+          **Parameters.** De input is een JSON Schema-object. Beschrijf elke property, markeer
+          verplichte velden in `required` en beperk waarden: `enum` voor vaste keuzes, `pattern`
+          voor formaten, `minimum` voor getallen. Zulke beperkingen voorkomen hele groepen foute
+          calls.
+
+          **Resultaten.** Geef kleine, gestructureerde resultaten terug met alleen wat het model
+          nodig heeft. Geef bij fouten een melding waar het model iets mee kan: wat er misging en
+          wat wel zou werken.
+
+          **Veiligheid.** Behandel argumenten als onbetrouwbare input, ook al komen ze van "je
+          eigen" model. Een prompt injection in een bericht kan een model tools laten aanroepen met
+          kwaadaardige argumenten. Controleer alles, geef tools alleen de rechten die ze nodig
+          hebben en vraag een mens om toestemming voor alles wat destructief of duur is.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: executor
+              prompt: Wie voert de functie echt uit als een model een tool call doet?
+              explanation: Het model maakt alleen de call. Jouw applicatie voert hem uit en geeft het resultaat terug.
+              options:
+                - { id: model, text: "De model provider, op zijn servers" }
+                - { id: app, text: "Jouw applicatiecode" }
+                - { id: schema, text: "De JSON Schema-validator" }
+            - id: unknown-item
+              prompt: Een model roept get_item aan met een id die niet bestaat. Wat moet je tool teruggeven?
+              explanation: Een gestructureerde foutmelding legt het probleem uit, zodat het model zich kan herstellen of het de bezoeker kan vertellen.
+              options:
+                - { id: crash, text: "Een exception gooien, zodat het request faalt met HTTP 500" }
+                - { id: empty, text: "Een leeg object" }
+                - { id: error, text: "Een tool result gemarkeerd als fout, met een duidelijke melding" }
+            - id: descriptions
+              prompt: Waarom zijn parameterbeschrijvingen en enums zo belangrijk?
+              explanation: De definition is de enige documentatie van het model. Beperkingen en beschrijvingen sturen het naar geldige calls.
+              options:
+                - { id: docs, text: "Het is alles wat het model weet over hoe het de tool moet aanroepen" }
+                - { id: speed, text: "Het model antwoordt er sneller door" }
+                - { id: none, text: "Niet; modellen negeren ze" }
+            - id: injection
+              prompt: Welke werkwijzen beschermen je als een prompt injection een tool probeert te triggeren?
+              explanation: Controleer argumenten, houd tools beperkt en laat een mens destructieve acties bevestigen.
+              options:
+                - { id: validate, text: "Elk argument op de server controleren" }
+                - { id: confirm, text: "Een mens toestemming vragen voor destructieve acties" }
+                - { id: trust, text: "Argumenten vertrouwen omdat je eigen model ze maakte" }
+                - { id: scope, text: "Tools alleen de rechten geven die ze nodig hebben" }
+  build-tools:
+    title: Bouw de tools
+    steps:
+      previous-course:
+        title: Je catalogus-API werkt
+      contract:
+        title: De tools en het contract
+        body: |
+          Voeg twee endpoints toe aan de server van {{theme.data.site.name}}:
+
+          - `GET /tools` geeft `{"tools": [...]}` terug. Elke tool heeft een `name`, `description`
+            en `input_schema` (een JSON Schema-object met `properties`).
+          - `POST /tools/call` met `{"name": "...", "arguments": {...}}` geeft HTTP 200 terug met
+            `{"is_error": false, "content": {...}}` of `{"is_error": true, "error": "een nuttige
+            melding"}`. Ongeldige input is een tool-fout, geen HTTP-fout, zodat een model hem kan
+            lezen.
+
+          **Tools:**
+
+          - `get_item(item_id)` geeft één item uit `data/items.json` terug.
+          - `list_items(category?, max_price?)` geeft `{"items": [...]}` terug met de items die aan
+            beide optionele filters voldoen.
+          - `convert_currency(amount, from, to)` met de vaste koersen hieronder. Valuta zijn `EUR`,
+            `USD`, `GBP` en `JPY`. Geeft `amount` (afgerond op 2 decimalen) en `currency` terug.
+        config:
+          snippets:
+            - { filename: Wisselkoersen, caption: "Vaste koersen per 1 EUR, zodat de uitkomsten voorspelbaar zijn." }
+      tool-server:
+        title: Voer de tool-checks uit
+        body: |
+          Start je server en vul de basis-URL in. Het platform leest je tool definitions en doet
+          calls die je nog niet gezien hebt: geldige, een onbekende {{theme.item}}, een ontbrekend
+          argument, filters, een niet-ondersteunde valuta en een tool die niet bestaat.
+        validation:
+          cases:
+            - { id: list, label: Geeft de drie tools met descriptions en object-schema's }
+            - { id: get-item, label: Zoekt één item op }
+            - { id: unknown-item, label: Meldt een onbekend item als herstelbare tool-fout }
+            - { id: missing-argument, label: Weigert een call met een ontbrekend argument }
+            - { id: filter-category, label: Geeft de items van één categorie }
+            - { id: filter-price, label: Past een maximumprijs toe }
+            - { id: convert, label: Rekent een valuta om met de vaste koersen }
+            - { id: cross-rate, label: Rekent om tussen twee valuta die geen euro zijn }
+            - { id: bad-currency, label: Weigert een niet-ondersteunde valuta }
+            - { id: unknown-tool, label: Weigert een tool die niet bestaat }
+  connect-model:
+    title: Koppel een model
+    steps:
+      chat-contract:
+        title: Maak de loop rond met een model
+        body: |
+          Voeg nu `POST /api/chat` toe dat `{"message": "..."}` ontvangt en de loop uitvoert met een
+          model naar keuze: een gehoste API of een lokaal model, zolang het tool calling ondersteunt.
+
+          1. Stuur een system prompt, het bericht van de bezoeker en je drie tool definitions naar
+             het model. De system prompt zegt dat de assistent bezoekers van
+             {{theme.data.site.name}} helpt en tools alleen gebruikt voor vragen over de catalogus
+             en prijzen.
+          2. Zolang het model tool calls teruggeeft, voer je ze uit **via je eigen executor** (met
+             dezelfde controles als `/tools/call`) en stuur je de resultaten terug.
+          3. Stop als het model met tekst antwoordt, of na **hooguit 6 rondes**. Een loop zonder
+             limiet kan een flinke rekening opleveren als een model vastloopt.
+
+          Antwoord met:
+
+          ```json
+          {
+            "answer": "De {{theme.probes.catalog.item_name}} kost …",
+            "tool_calls": [ { "name": "get_item", "arguments": { "item_id": "{{theme.probes.catalog.item_id}}" } } ]
+          }
+          ```
+
+          `tool_calls` bevat elke call die het model deed, op volgorde. Het platform controleert
+          daarmee dat het model de tools gebruikte, en ze niet gebruikte als dat niet nodig was.
+
+          Houd je API key uit je code: lees hem uit een omgevingsvariabele in `.env`.
+      chat:
+        title: Voer de gesprekschecks uit
+        body: |
+          Het platform stuurt vier verborgen vragen naar `/api/chat`. De eerste moet slagen, en
+          minstens twee van de andere drie. Modellen verschillen, dus verbeter je system prompt en
+          tool descriptions in plaats van losse vragen apart af te vangen. Je assistent mag
+          antwoorden in de taal van de vraag.
+        validation:
+          cases:
+            - { id: price, label: Beantwoordt een prijsvraag door een catalogus-tool aan te roepen }
+            - { id: chain, label: Combineert tools om een prijs in Amerikaanse dollars te geven }
+            - { id: no-tools, label: Roept geen tools aan voor een vraag die er niets mee te maken heeft }
+            - { id: missing, label: Vertelt de bezoeker wanneer iets niet bestaat }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Waar trek je de grens?
+        config:
+          prompt: Noem één tool voor {{theme.data.site.name}} die een model vrij mag aanroepen en één die altijd toestemming van een mens nodig heeft. Leg uit waarom.
+        validation:
+          required_concepts:
+            - { label: "risico, kosten of onomkeerbaarheid", any_of: [destructive, delete, money, payment, irreversible, risk, cost, refund, send, booking, order, verwijder, geld, betaling, onomkeerbaar, risico, kosten, terugbetal, versturen, boeking, bestelling] }
+      finish:
+        title: Je model kan handelen
+        body: |
+          Je hebt de loop gebouwd waar elke agent op draait. Hierna zorg je dat zoeken op
+          {{theme.data.site.name}} begrijpt wat bezoekers *bedoelen*.

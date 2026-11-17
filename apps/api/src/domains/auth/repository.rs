@@ -27,8 +27,8 @@ pub async fn find_user_by_token_hash(
     executor: impl PgExecutor<'_>,
     token_hash: &[u8],
 ) -> Result<Option<CurrentUser>, sqlx::Error> {
-    let row: Option<(Uuid, String, String, String, Uuid)> = sqlx::query_as(
-        "SELECT u.id, u.email, u.display_name, u.role, s.id
+    let row: Option<(Uuid, String, String, String, String, Uuid)> = sqlx::query_as(
+        "SELECT u.id, u.email, u.display_name, u.role, u.locale, s.id
          FROM auth_sessions s JOIN users u ON u.id = s.user_id
          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()",
     )
@@ -36,11 +36,12 @@ pub async fn find_user_by_token_hash(
     .fetch_optional(executor)
     .await?;
     Ok(row.map(
-        |(id, email, display_name, role, auth_session_id)| CurrentUser {
+        |(id, email, display_name, role, locale, auth_session_id)| CurrentUser {
             id,
             email,
             display_name,
             role,
+            locale,
             auth_session_id,
         },
     ))

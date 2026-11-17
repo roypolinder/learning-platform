@@ -1,33 +1,56 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: semantic-matching
-version: 1.0.0
-title: Semantic matching with embeddings
-summary: Match questions to answers by meaning, not keywords, and prove it on queries that share no words with the answer.
+version: 2.0.0
+title: Semantic search
+summary: Make the search on your site understand what visitors mean, not just the words they type — and prove it on queries that share no words with your catalog.
 description: |
-  Keyword search fails the moment people use different words than your documents:
-  *"someone took my bike"* never mentions *"theft"*. Embeddings turn text into vectors
-  where similar meaning lands close together, so you can match on meaning instead.
+  Keyword search fails the moment visitors use different words than your catalog. Someone
+  searching for *"{{theme.search_example}}"* on {{theme.data.site.name}} may not use a single
+  word from the {{theme.item}} they are looking for. Embeddings turn text into vectors where
+  similar meaning lands close together, so you can search on meaning instead.
 
-  You will build a small matcher for a bike-rental FAQ that ranks entries by cosine
-  similarity and knows when nothing matches. The platform tests it with hidden paraphrases
-  that deliberately avoid the FAQ's wording, and with questions that have no answer at all.
+  You add a search endpoint to your site that ranks your {{theme.items}} by cosine similarity
+  and knows when nothing matches. The platform tests it with hidden queries that avoid your
+  catalog's wording — one of them in Dutch — and with questions that have nothing to do with
+  your site.
 category: AI foundations
 difficulty: beginner
-order: 40
+order: 6
 estimated_minutes: 50
-tags: [embeddings, semantic-search, similarity, nlp]
+tags: [embeddings, semantic-search, similarity]
 objectives:
   - Explain what an embedding is and why similar meanings end up close together
   - Compute and interpret cosine similarity
-  - Rank candidates by similarity and choose a sensible "no match" threshold
-  - Recognize where lexical search still beats semantic matching
+  - Rank items by similarity and choose a sensible "no match" threshold
+  - Recognize where keyword search still beats semantic search
 prerequisites:
-  - title: Basic experience building a small HTTP service in any language
+  - title: Tool calling
+    course: tool-calling-fundamentals
+glossary:
+  - term: Embedding
+    definition: A list of numbers (a vector) that represents the meaning of a text. Texts with similar meaning get vectors that point in similar directions.
+  - term: Embedding model
+    definition: A model that turns text into embeddings. Queries and items must be embedded with the same model.
+  - term: Vector
+    definition: A list of numbers. An embedding usually has hundreds or thousands of them.
+  - term: Cosine similarity
+    definition: A score for how much two vectors point in the same direction. 1 is identical in meaning, 0 is unrelated.
+  - term: Semantic search
+    definition: Searching on meaning with embeddings, instead of on matching words.
+  - term: Lexical search
+    definition: Searching on matching words, for example with BM25. Strong for names, codes and rare terms.
+  - term: Hybrid search
+    definition: Combining lexical and semantic search and merging their rankings.
+  - term: Threshold
+    definition: The minimum similarity score for a result to count as a match. Below it, you return "no results".
+  - term: Multilingual model
+    definition: An embedding model trained on many languages, so a Dutch query can match an English description.
 extensions: [quiz, service]
 help: |
-  The learner picks any embedding model (hosted API or local). Help them understand vectors,
-  cosine similarity and thresholds. Encourage printing the scores for a few queries to build
-  intuition. Never hand them the threshold value or the full implementation.
+  The learner adds semantic search over their website's catalog, with any embedding model
+  (hosted API or local). Help them understand vectors, cosine similarity and thresholds.
+  Encourage printing the scores for a few queries to build intuition. Never hand them the
+  threshold value or the full implementation.
 
 sections:
   - id: concepts
@@ -48,46 +71,81 @@ sections:
             apart.
 
           To compare two vectors we usually use **cosine similarity**: the cosine of the angle
-          between them. 1 means the same direction, 0 means unrelated, and negative means opposed.
-          Many models return normalized vectors, in which case cosine similarity is just the
-          dot product.
+          between them. 1 means the same direction, 0 means unrelated. Many models return
+          normalized vectors, in which case cosine similarity is just the dot product.
 
           A few rules that hold for every embedding model:
 
-          - **Embed queries and documents with the same model.** Vectors from different
-            models (or versions) are not comparable. Switching models means re-embedding
-            everything.
+          - **Embed queries and items with the same model.** Vectors from different models (or
+            versions) are not comparable. Switching models means re-embedding everything.
           - **Scores are relative to the model.** 0.45 can be a great match for one model and
             noise for another. You calibrate thresholds per model.
-          - **Embed what you want to match on.** For an FAQ, the question *and* its answer
-            often work better than the question alone.
+          - **Embed what you want to match on.** For your catalog, the name *and* the description
+            (and maybe the tags) work much better than the name alone.
+          - **Multilingual models** place a Dutch query close to an English description with the
+            same meaning. Your visitors don't all search in English.
+
+      - id: search-flow
+        type: diagram
+        title: How a semantic search works
+        estimated_minutes: 3
+        config:
+          nodes:
+            - { id: items, label: "Your {{theme.items}}", kind: data, row: 0, col: 0, detail: "Name + description + tags of every item, embedded **once** at startup." }
+            - { id: embed-items, label: Embedding model, kind: model, row: 0, col: 1, detail: "Turns each item text into a vector." }
+            - { id: vectors, label: Item vectors, kind: data, row: 0, col: 2, detail: "Kept in memory for now. A vector database comes in the next course." }
+            - { id: query, label: Visitor's query, kind: person, row: 1, col: 0, detail: "For example: *{{theme.search_example}}*." }
+            - { id: embed-query, label: Embedding model, kind: model, row: 1, col: 1, detail: "The **same** model, so the query vector is comparable with the item vectors." }
+            - { id: rank, label: Cosine similarity + threshold, kind: tool, row: 1, col: 2, detail: "Score every item, sort best first, drop everything below your threshold." }
+          edges:
+            - { from: items, to: embed-items }
+            - { from: embed-items, to: vectors }
+            - { from: query, to: embed-query }
+            - { from: embed-query, to: rank }
+            - { from: vectors, to: rank, label: compare }
+
+      - id: place-parts
+        type: diagram_exercise
+        title: Complete the search pipeline
+        estimated_minutes: 3
+        config:
+          prompt: Drag the right labels into the empty boxes. Not every label is needed.
+          nodes:
+            - { id: query, label: Visitor's query, kind: person, row: 0, col: 0 }
+            - { id: embed, slot: true, row: 0, col: 1 }
+            - { id: compare, slot: true, row: 0, col: 2 }
+            - { id: results, label: Ranked results, kind: data, row: 0, col: 3 }
+          edges:
+            - { from: query, to: embed }
+            - { from: embed, to: compare, label: query vector }
+            - { from: compare, to: results }
+          chips:
+            - { id: model, label: Embedding model }
+            - { id: cosine, label: Cosine similarity with every item }
+            - { id: keywords, label: Count matching words }
+            - { id: chat, label: Chat model writes an answer }
+        validation:
+          slots: { embed: model, compare: cosine }
 
       - id: lexical-vs-semantic
-        type: interactive_content
-        title: Lexical, semantic or both?
-        estimated_minutes: 5
-        config:
-          panels:
-            - title: Lexical (keyword) search
-              body: |
-                Matches exact terms, often with scoring such as BM25. Strong for product codes,
-                names, error messages and rare terms (`ERR_SSL_PROTOCOL`, `A-1042`). Blind to
-                synonyms and paraphrases.
-            - title: Semantic matching
-              body: |
-                Matches meaning via embeddings. Strong for natural questions and paraphrases,
-                also across languages with multilingual models. Weaker for exact identifiers
-                and new jargon the model never saw.
-            - title: Hybrid
-              body: |
-                Run both and merge the rankings, for example with reciprocal rank fusion. This
-                is the default in most production search and retrieval systems because it
-                covers both failure modes.
-            - title: Thresholds
-              body: |
-                A ranker always returns *something*. To say "I don't know", look at the best
-                score: below a threshold you calibrated on real queries, return no match
-                instead of a confident wrong answer.
+        type: explanation
+        title: Keywords, meaning or both?
+        estimated_minutes: 4
+        body: |
+          **Lexical (keyword) search** matches exact terms, often with scoring such as BM25. It is
+          strong for names, product codes and rare terms, and blind to synonyms and paraphrases.
+
+          **Semantic search** matches meaning via embeddings. It is strong for natural questions
+          and paraphrases, also across languages with multilingual models. It is weaker for exact
+          identifiers and new jargon the model never saw.
+
+          **Hybrid search** runs both and merges the rankings, for example with reciprocal rank
+          fusion. That is the default in most production search, because it covers both failure
+          modes.
+
+          **Thresholds.** A ranker always returns *something*. To say "no results", look at the
+          best score: below a threshold you calibrated on real queries, return nothing instead of
+          a confident wrong answer.
 
       - id: check-concepts
         type: quiz
@@ -104,137 +162,137 @@ sections:
                 - { id: zero, text: "0", correct: true }
                 - { id: minus, text: "-1" }
             - id: model-change
-              prompt: You switch to a newer embedding model. What must you do with the stored document vectors?
+              prompt: You switch to a newer embedding model. What must you do with the stored item vectors?
               explanation: Vectors from different models live in different spaces and cannot be compared.
               options:
                 - { id: nothing, text: "Nothing, vectors are model-independent" }
-                - { id: reembed, text: "Re-embed all documents with the new model", correct: true }
+                - { id: reembed, text: "Re-embed all items with the new model", correct: true }
                 - { id: normalize, text: "Normalize them again" }
             - id: identifier
-              prompt: Users search for exact error codes such as ERR_QUOTA_429. Which approach handles that best?
+              prompt: Visitors also search for exact item ids such as {{theme.probes.catalog.item_id}}. Which approach handles that best?
               explanation: Exact identifiers are lexical. Hybrid search keeps semantic matching for everything else.
               options:
-                - { id: semantic, text: "Pure semantic matching" }
-                - { id: hybrid, text: "Hybrid: keyword matching combined with semantic matching", correct: true }
+                - { id: semantic, text: "Pure semantic search" }
+                - { id: hybrid, text: "Hybrid: keyword matching combined with semantic search", correct: true }
                 - { id: bigger, text: "A bigger embedding model" }
             - id: threshold
               prompt: Why calibrate a minimum similarity score?
-              explanation: Ranking always returns a top result; a threshold lets you answer "no match" instead of guessing.
+              explanation: Ranking always returns a top result; a threshold lets you answer "no results" instead of guessing.
               options:
                 - { id: speed, text: "To make search faster" }
-                - { id: none, text: "So the system can say nothing matches instead of returning a wrong answer", correct: true }
+                - { id: none, text: "So the search can return nothing instead of a wrong result", correct: true }
                 - { id: storage, text: "To store fewer vectors" }
 
   - id: build
-    title: Build the matcher
+    title: Build the search
     steps:
-      - id: faq-data
+      - id: previous-course
+        type: prerequisite
+        title: Your tools work
+        config:
+          courses: [tool-calling-fundamentals]
+
+      - id: contract
         type: code_example
-        title: The FAQ and the contract
+        title: The search endpoint
         estimated_minutes: 4
         body: |
-          Build a small HTTP service for *Velora*, a bike-rental company, in any language.
-          Use any embedding model: a hosted embeddings API or a local model.
+          Add a search endpoint to your server. Use any embedding model, preferably a
+          **multilingual** one: a hosted embeddings API or a local model.
 
-          1. At startup, embed each FAQ entry once and keep the vectors in memory. A vector
-             database is not needed for 10 items; that's the next course.
-          2. `GET /match?q=<question>` embeds the question, scores every entry with cosine
-             similarity and responds with up to **3** matches above your threshold, best first:
+          1. At startup, embed every item of `data/items.json` once — name, description and
+             tags together — and keep the vectors in memory.
+          2. `GET /api/search?q=<query>` embeds the query, scores every item with cosine
+             similarity and responds with up to **5** results above your threshold, best first.
+          3. When nothing is relevant, respond `{ "results": [] }`.
 
-          ```json
-          { "matches": [ { "id": "faq-flat", "score": 0.71 }, { "id": "faq-booking", "score": 0.42 } ] }
-          ```
-
-          When nothing is relevant, respond `{ "matches": [] }`.
+          Then add a search box to your home page that calls the endpoint. That part isn't
+          checked, but it is the fun part: try a few searches of your own.
         config:
           snippets:
-            - filename: faq.json
+            - filename: GET /api/search?q=…
               language: json
               code: |
-                [
-                  { "id": "faq-booking", "question": "How can I book a bicycle ahead of time?", "answer": "Use the app or website up to 30 days before your ride. Pick the station, the date and the type of bike." },
-                  { "id": "faq-theft", "question": "What if my bike disappears while it is parked?", "answer": "Report it in the app within 24 hours. Our theft cover pays everything above a 50 euro excess if the bike was locked." },
-                  { "id": "faq-flat", "question": "What should I do with a flat tyre during my ride?", "answer": "Call roadside assistance. A mechanic reaches you within 45 minutes in the city centre, or swap the bike at any station." },
-                  { "id": "faq-kids", "question": "Do you have bicycles for children?", "answer": "Yes. We have 16 and 20 inch kids' bikes, plus child seats and trailers for toddlers." },
-                  { "id": "faq-refund", "question": "Can I get my money back if I cancel?", "answer": "Cancellations more than 24 hours ahead are refunded in full. Later cancellations get a voucher worth half the price." },
-                  { "id": "faq-ebike", "question": "How far can the electric bikes go on one charge?", "answer": "About 70 km in eco mode. You can swap batteries for free at stations with a lightning symbol." },
-                  { "id": "faq-helmet", "question": "Are helmets included?", "answer": "Helmets in three sizes are free with every rental. Ask at the counter." },
-                  { "id": "faq-group", "question": "Can I rent for a group or a company outing?", "answer": "For 8 or more riders we offer group rates and an optional guide. Contact our events team." },
-                  { "id": "faq-payment", "question": "Which payment methods do you accept?", "answer": "Cards, mobile wallets, and invoices for businesses. Cash is not accepted." },
-                  { "id": "faq-age", "question": "Is there a minimum age to rent alone?", "answer": "Riders must be 16 to rent on their own. Younger riders need an adult on the booking." }
-                ]
+                { "results": [ { "id": "{{theme.probes.search.situation.expected}}", "score": 0.71 }, { "id": "{{theme.probes.catalog.item_id}}", "score": 0.44 } ] }
+            - filename: cosine.js
+              language: javascript
+              caption: Cosine similarity in a few lines. Many models already return normalized vectors.
+              code: |
+                export function cosine(a, b) {
+                  let dot = 0, normA = 0, normB = 0;
+                  for (let i = 0; i < a.length; i++) {
+                    dot += a[i] * b[i];
+                    normA += a[i] * a[i];
+                    normB += b[i] * b[i];
+                  }
+                  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+                }
 
-      - id: matcher
+      - id: search
         type: service_check
-        title: Run the matching checks
+        title: Run the search checks
         estimated_minutes: 25
         body: |
-          The platform sends hidden questions to `/match`. Most of them share no meaningful words
-          with the right FAQ entry, so keyword matching will fail them. Some have no answer in
-          the FAQ at all and should return no matches.
+          The platform sends hidden queries to `/api/search`. Most of them share no meaningful
+          words with the right {{theme.item}}, so keyword search fails them; one is in Dutch.
+          Two have nothing to do with {{theme.data.site.name}} and should return no results.
 
-          The format checks must all pass, and at least 70% of the meaning checks.
+          The format check must pass, and at least two thirds of the meaning checks.
         help: |
-          Common issues: embedding the query with a different model than the documents; returning
-          scores in ascending order; a threshold that is too high (no matches for paraphrases) or
-          too low (off-topic questions match). Suggest the learner prints the top scores for a few
-          of their own paraphrases and off-topic questions and picks a threshold between the two
-          groups. Embedding question and answer together often helps.
+          Common issues: embedding the query with a different model than the items; embedding only
+          the name; sorting scores ascending; a threshold that is too high (no results for
+          paraphrases) or too low (off-topic questions match). Suggest printing the top scores for
+          a few of their own paraphrases and off-topic questions, and picking a threshold between
+          the two groups.
         validation:
           timeout_ms: 15000
           parallel: true
-          min_pass_ratio: 0.7
+          min_pass_ratio: 0.66
           cases:
             - id: format
-              label: Returns at most 3 matches, best first
-              request: { path: /match, query: { q: "Do you rent bikes for kids?" } }
+              label: Returns at most 5 results, best first
+              request: { path: /api/search, query: { q: "{{theme.data.items.0.name}}" } }
               expect:
                 json:
-                  - { pointer: /matches, type: array, max_items: 3, min_items: 1 }
-                  - { pointer: /matches, field: /score, sorted: desc }
-                  - { pointer: /matches, top_k: 1, field: /id, includes: faq-kids }
-            - id: theft
-              label: “Someone took my bicycle from outside the supermarket” finds the theft entry
+                  - { pointer: /results, type: array, max_items: 5, min_items: 1 }
+                  - { pointer: /results, field: /score, sorted: desc }
+                  - { pointer: /results, top_k: 1, field: /id, includes: "{{theme.data.items.0.id}}" }
+            - id: dutch
+              label: A Dutch query finds the right {{theme.item}}
               graded: true
-              request: { path: /match, query: { q: "Someone took my bicycle from outside the supermarket" } }
+              request: { path: /api/search, query: { q: "{{theme.probes.search.dutch.query}}" } }
               expect:
-                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-theft }]
-            - id: flat
-              label: “My wheel lost all its air” finds the flat tyre entry
+                json: [{ pointer: /results, top_k: 3, field: /id, includes: "{{theme.probes.search.dutch.expected}}" }]
+            - id: paraphrase
+              label: A paraphrase without catalog words finds the right {{theme.item}}
               graded: true
-              request: { path: /match, query: { q: "My wheel lost all its air halfway through the trip" } }
+              request: { path: /api/search, query: { q: "{{theme.probes.search.paraphrase.query}}" } }
               expect:
-                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-flat }]
-            - id: refund
-              label: “Will I be reimbursed if my plans change?” finds the refund entry
+                json: [{ pointer: /results, top_k: 3, field: /id, includes: "{{theme.probes.search.paraphrase.expected}}" }]
+            - id: need
+              label: A described need finds the right {{theme.item}}
               graded: true
-              request: { path: /match, query: { q: "My plans changed. Will I be reimbursed?" } }
+              request: { path: /api/search, query: { q: "{{theme.probes.search.need.query}}" } }
               expect:
-                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-refund }]
-            - id: range
-              label: “How many kilometres can the motorised one do?” finds the e-bike entry
+                json: [{ pointer: /results, top_k: 3, field: /id, includes: "{{theme.probes.search.need.expected}}" }]
+            - id: situation
+              label: A described situation finds the right {{theme.item}}
               graded: true
-              request: { path: /match, query: { q: "How many kilometres can the motorised one do before it's empty?" } }
+              request: { path: /api/search, query: { q: "{{theme.probes.search.situation.query}}" } }
               expect:
-                json: [{ pointer: /matches, top_k: 1, field: /id, includes: faq-ebike }]
-            - id: toddler
-              label: A question about a small child finds the kids entry
-              graded: true
-              request: { path: /match, query: { q: "Is there something suitable for my 6-year-old?" } }
-              expect:
-                json: [{ pointer: /matches, top_k: 2, field: /id, includes: faq-kids }]
-            - id: off-topic-food
-              label: An unrelated question about cooking returns no matches
-              graded: true
-              request: { path: /match, query: { q: "What is a good recipe for vegetable lasagna?" } }
-              expect:
-                json: [{ pointer: /matches, max_items: 0 }]
+                json: [{ pointer: /results, top_k: 3, field: /id, includes: "{{theme.probes.search.situation.expected}}" }]
             - id: off-topic-passport
-              label: An unrelated question about passports returns no matches
+              label: A question about passports returns no results
               graded: true
-              request: { path: /match, query: { q: "How do I renew my passport?" } }
+              request: { path: /api/search, query: { q: "How do I renew my passport?" } }
               expect:
-                json: [{ pointer: /matches, max_items: 0 }]
+                json: [{ pointer: /results, max_items: 0 }]
+            - id: off-topic-geography
+              label: A geography question returns no results
+              graded: true
+              request: { path: /api/search, query: { q: "What is the capital of Australia?" } }
+              expect:
+                json: [{ pointer: /results, max_items: 0 }]
 
   - id: wrap-up
     title: Wrap up
@@ -245,7 +303,7 @@ sections:
         optional: true
         estimated_minutes: 3
         config:
-          prompt: Describe a query for this FAQ where keyword search would beat your semantic matcher, and how you would combine both.
+          prompt: Describe a search on {{theme.data.site.name}} where keyword search would beat your semantic search, and how you would combine both.
         validation:
           min_words: 25
           required_concepts:
@@ -253,8 +311,8 @@ sections:
               any_of: [hybrid, combine, both, fusion, together, keyword]
       - id: finish
         type: automatic_completion
-        title: You match on meaning
-        depends_on: [matcher]
+        title: Your search understands meaning
+        depends_on: [search]
         body: |
-          You can now match on meaning and know when to say "no match". The vector databases
-          course scales this to many documents, metadata filters and live updates.
+          Visitors of {{theme.data.site.name}} can now search the way they talk. The next course
+          moves the vectors into a vector database, with filters and live updates.

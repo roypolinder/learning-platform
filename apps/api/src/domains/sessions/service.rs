@@ -18,6 +18,8 @@ use uuid::Uuid;
 use super::domain::{Actor, CourseSession, NewEvent, progress_from_rows};
 use super::repository;
 use crate::domains::courses::catalog::LoadedCourse;
+use crate::domains::learners::domain::LearnerProfile;
+use crate::domains::learners::repository as learners;
 use crate::error::{ApiError, ApiResult};
 use crate::realtime::SessionUpdate;
 use crate::state::AppState;
@@ -44,6 +46,32 @@ impl<'a> SessionService<'a> {
 
     fn engine(&self) -> &CourseEngine {
         &self.state.engine
+    }
+
+    /// A course version in the learner's language with their project filled in.
+    async fn course_for(
+        &self,
+        version_id: Uuid,
+        profile: &LearnerProfile,
+    ) -> ApiResult<Arc<LoadedCourse>> {
+        let template = self
+            .state
+            .catalog
+            .version(&self.state.db, self.engine(), version_id)
+            .await?;
+        self.render(&template, profile)
+    }
+
+    fn render(
+        &self,
+        template: &LoadedCourse,
+        profile: &LearnerProfile,
+    ) -> ApiResult<Arc<LoadedCourse>> {
+        self.state.catalog.render(
+            self.engine(),
+            template,
+            profile.audience(&self.state.themes),
+        )
     }
 
     /// Starts a course, or resumes the learner's active session for it.
@@ -95,8 +123,17 @@ impl<'a> SessionService<'a> {
         if loaded.version_id == session.course_version_id {
             return Ok(None);
         }
-        let previous = self.load(user_id, session.id).await?;
-        let session_id = match self.create(user_id, &loaded, Some(&previous)).await? {
+        let previous = match self.load(user_id, session.id).await {
+            Ok(previous) => Some(previous),
+            Err(error) => {
+                // Versions from before a breaking engine change can no longer be compiled.
+                // Their progress cannot carry over, so the learner starts the current version.
+                tracing::warn!(session = %session.id, %error, "outdated session cannot be loaded; abandoning it");
+                self.abandon(user_id, session.id).await?;
+                None
+            }
+        };
+        let session_id = match self.create(user_id, &loaded, previous.as_ref()).await? {
             Some(id) => id,
             None => {
                 match repository::find_active(&self.state.db, user_id, loaded.course_uuid).await? {
@@ -107,6 +144,24 @@ impl<'a> SessionService<'a> {
         };
         tracing::info!(from = %session.id, to = %session_id, course = %loaded.course.id, "session upgraded to current course version");
         Ok(Some(self.load(user_id, session_id).await?))
+    }
+
+    async fn abandon(&self, user_id: Uuid, session_id: Uuid) -> ApiResult<()> {
+        let mut tx = self.state.db.begin().await?;
+        if let Some(locked) = repository::lock_for_user(&mut tx, session_id, user_id).await?
+            && locked.status == SessionStatus::Active
+        {
+            repository::update_state(
+                &mut tx,
+                locked.id,
+                SessionStatus::Abandoned,
+                locked.current_step_id.as_deref(),
+                None,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
     }
 
     /// Returns `None` when another request created the active session first.
@@ -134,7 +189,8 @@ impl<'a> SessionService<'a> {
             )
             .await?;
         }
-        let context = engine_context(&mut tx, user_id).await?;
+        let (context, profile) = learner_context(&mut tx, user_id).await?;
+        let loaded = &*self.render(loaded, &profile)?;
         let (mut progress, transitions) = self.engine().start(&loaded.course, &context);
         let carried = match previous {
             Some(previous) => carry_over(
@@ -216,11 +272,8 @@ impl<'a> SessionService<'a> {
         let session = repository::find_for_user(&self.state.db, session_id, user_id)
             .await?
             .ok_or(ApiError::NotFound("session"))?;
-        let course = self
-            .state
-            .catalog
-            .version(&self.state.db, self.engine(), session.course_version_id)
-            .await?;
+        let profile = learners::profile(&self.state.db, user_id).await?;
+        let course = self.course_for(session.course_version_id, &profile).await?;
         let mut progress =
             progress_from_rows(repository::load_steps(&self.state.db, session.id).await?);
         self.engine().reconcile(&course.course, &mut progress);
@@ -403,11 +456,8 @@ impl<'a> SessionService<'a> {
             .await?
             .ok_or(ApiError::NotFound("session"))?;
         ensure_open(&session)?;
-        let course = self
-            .state
-            .catalog
-            .version(&self.state.db, self.engine(), session.course_version_id)
-            .await?;
+        let (context, profile) = learner_context(&mut tx, user_id).await?;
+        let course = self.course_for(session.course_version_id, &profile).await?;
         let mut progress = progress_from_rows(repository::load_steps(&mut *tx, session.id).await?);
         let added = self.engine().reconcile(&course.course, &mut progress);
         if !added.is_empty() {
@@ -417,7 +467,6 @@ impl<'a> SessionService<'a> {
                 .collect();
             repository::insert_steps(&mut tx, session.id, &rows).await?;
         }
-        let context = engine_context(&mut tx, user_id).await?;
         let before = progress.clone();
 
         let advance = operation(self.engine(), &course.course, &mut progress, &context)?;
@@ -550,11 +599,18 @@ fn ensure_open(session: &CourseSession) -> ApiResult<()> {
     Ok(())
 }
 
-async fn engine_context(connection: &mut PgConnection, user_id: Uuid) -> ApiResult<EngineContext> {
-    Ok(EngineContext {
+async fn learner_context(
+    connection: &mut PgConnection,
+    user_id: Uuid,
+) -> ApiResult<(EngineContext, LearnerProfile)> {
+    let profile = learners::profile(&mut *connection, user_id).await?;
+    let mut context = EngineContext {
         completed_courses: repository::completed_course_slugs(connection, user_id)
             .await?
             .into_iter()
             .collect(),
-    })
+        ..EngineContext::default()
+    };
+    profile.apply_to(&mut context);
+    Ok((context, profile))
 }

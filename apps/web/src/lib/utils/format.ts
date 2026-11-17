@@ -1,34 +1,19 @@
+import { i18n, t } from '#lib/i18n/index.svelte.ts';
 import type { Difficulty, StepStatus } from '#lib/types/api.ts';
 
 export function formatMinutes(minutes: number): string {
-	if (minutes < 60) return `${minutes} min`;
+	if (minutes < 60) return t('time.minutes', { minutes });
 	const hours = Math.floor(minutes / 60);
 	const rest = minutes % 60;
-	return rest ? `${hours} h ${rest} min` : `${hours} h`;
+	return rest ? t('time.hours_minutes', { hours, minutes: rest }) : t('time.hours', { hours });
 }
 
-const difficultyLabels: Record<Difficulty, string> = {
-	beginner: 'Beginner',
-	intermediate: 'Intermediate',
-	advanced: 'Advanced'
-};
+export const formatDifficulty = (difficulty: Difficulty) => t(`difficulty.${difficulty}`);
 
-export const formatDifficulty = (difficulty: Difficulty) => difficultyLabels[difficulty];
-
-const statusLabels: Record<StepStatus, string> = {
-	locked: 'Locked',
-	available: 'Not started',
-	in_progress: 'In progress',
-	completed: 'Completed',
-	failed: 'Needs another try',
-	skipped: 'Skipped'
-};
-
-export const formatStepStatus = (status: StepStatus) => statusLabels[status];
-
-const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+export const formatStepStatus = (status: StepStatus) => t(`status.${status}`);
 
 export function formatRelative(iso: string, now = Date.now()): string {
+	const relative = new Intl.RelativeTimeFormat(i18n.locale, { numeric: 'auto' });
 	const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
 	const units: [Intl.RelativeTimeFormatUnit, number][] = [
 		['day', 86400],
@@ -38,9 +23,9 @@ export function formatRelative(iso: string, now = Date.now()): string {
 	for (const [unit, size] of units) {
 		if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
 	}
-	return 'just now';
+	return t('time.just_now');
 }
 
 export function formatDate(iso: string): string {
-	return new Date(iso).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+	return new Date(iso).toLocaleDateString(i18n.locale, { day: 'numeric', month: 'short', year: 'numeric' });
 }

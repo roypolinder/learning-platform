@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import Button from '#lib/components/ui/Button.svelte';
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import type { CourseStep, StepProgress } from '#lib/types/api.ts';
@@ -84,7 +85,7 @@
 			<legend class="mb-2 text-[14px] font-medium">
 				{#if !single}<span class="mr-2 font-mono text-[12px] text-fg-subtle">{index + 1}</span>{/if}
 				{@html renderInlineMarkdown(question.prompt)}
-				{#if question.multiple}<span class="ml-1 text-[12px] font-normal text-fg-subtle">Select all that apply</span>{/if}
+				{#if question.multiple}<span class="ml-1 text-[12px] font-normal text-fg-subtle">{t('quiz.select_all')}</span>{/if}
 			</legend>
 			{#each question.options as option (option.id)}
 				{@const selected = answers[question.id]?.includes(option.id) ?? false}
@@ -106,7 +107,7 @@
 			{#if result && !completed}
 				<p class="flex items-start gap-1.5 text-[13px] {result.correct ? 'text-success' : 'text-warning'}">
 					<Icon name={result.correct ? 'check' : 'alert'} size={14} class="mt-0.5" />
-					{result.correct ? 'Correct.' : 'Not quite.'}
+					{t(result.correct ? 'quiz.correct' : 'quiz.not_quite')}
 					{#each result.selected as note (note.option)} {note.explanation}{/each}
 				</p>
 			{:else if result?.explanation}
@@ -119,10 +120,10 @@
 
 	<div class="flex items-center justify-end gap-3">
 		{#if completed}
-			<Button onclick={() => session.advance(step.id)}>Next step <Icon name="arrow-right" size={14} /></Button>
+			<Button onclick={() => session.advance(step.id)}>{t('common.next_step')} <Icon name="arrow-right" size={14} /></Button>
 		{:else}
-			{#if progress?.attempts}<span class="text-[12px] text-fg-subtle">Attempt {progress.attempts + 1}</span>{/if}
-			<Button variant="primary" disabled={!complete} loading={session.pending} onclick={submit}>Check answers</Button>
+			{#if progress?.attempts}<span class="text-[12px] text-fg-subtle">{t('quiz.attempt', { count: progress.attempts + 1 })}</span>{/if}
+			<Button variant="primary" disabled={!complete} loading={session.pending} onclick={submit}>{t('quiz.check')}</Button>
 		{/if}
 	</div>
 </div>

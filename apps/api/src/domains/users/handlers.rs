@@ -40,14 +40,14 @@ pub async fn update_me(
     user: CurrentUser,
     ApiJson(request): ApiJson<UpdateProfileRequest>,
 ) -> ApiResult<Json<UserDto>> {
-    let display_name = request.display_name.trim();
-    if display_name.is_empty() || display_name.chars().count() > 80 {
+    let display_name = request.display_name.as_deref().map(str::trim);
+    if display_name.is_some_and(|name| name.is_empty() || name.chars().count() > 80) {
         return Err(ApiError::Validation(vec![FieldError::new(
             "display_name",
             "must be between 1 and 80 characters",
         )]));
     }
-    let user = repository::update_display_name(&state.db, user.id, display_name)
+    let user = repository::update_profile(&state.db, user.id, display_name, request.locale)
         .await?
         .ok_or(ApiError::Unauthorized)?;
     Ok(Json(user.into()))

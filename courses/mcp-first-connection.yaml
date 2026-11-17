@@ -1,26 +1,50 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: mcp-first-connection
-version: 2.2.0
+version: 3.1.0
 title: Connect your AI agent over MCP
-summary: Learn how the Model Context Protocol works, then connect your own coding agent to this platform.
+summary: Learn how the Model Context Protocol works, connect your coding agent to the platform and let it fetch your project's seed data.
 description: |
   The Model Context Protocol (MCP) is the open standard AI agents use to talk to tools and data.
-  In this course you learn its core building blocks, write a real client configuration, and
-  connect the agent in your own editor to the platform's MCP server by signing in with OAuth.
-  The platform notices the connection and checks your configuration — no screenshots, no
-  copy-pasting tokens.
+  In this course you learn its building blocks, write a real client configuration, and connect
+  the agent in your own editor to the platform's MCP server by signing in with OAuth.
+
+  Then your agent puts that connection to work for {{theme.data.site.name}}: it fetches your
+  project's seed data from the platform and saves it in your workspace. The platform notices
+  the connection and checks the files — no screenshots, no copy-pasting tokens.
 category: AI tooling
 difficulty: beginner
-order: 10
-estimated_minutes: 25
+order: 2
+estimated_minutes: 30
 tags: [mcp, agents, vs-code]
 objectives:
-  - Explain what MCP servers, clients and hosts are responsible for
+  - Explain what MCP hosts, clients and servers are responsible for
   - Distinguish tools, resources and prompts
-  - Configure an HTTP MCP server for the Copilot harness without storing secrets
-  - Sign an agent in to a remote MCP server with OAuth and call its tools
+  - Configure an HTTP MCP server for your agent without storing secrets
+  - Sign an agent in to a remote MCP server with OAuth and use its tools in your project
 prerequisites:
-  - title: VS Code with GitHub Copilot, using the Copilot harness
+  - title: Start your project
+    course: project-setup
+glossary:
+  - term: MCP
+    definition: Model Context Protocol. The open standard that lets AI agents use tools and data from other programs.
+  - term: Host
+    definition: The application you work in, such as VS Code. It starts one MCP client per server.
+  - term: MCP client
+    definition: The connector inside the host that keeps a session with one MCP server.
+  - term: MCP server
+    definition: A program that offers tools, resources or prompts over MCP, like this learning platform.
+  - term: Tool
+    definition: A function the model can decide to call, with a name, a description and a JSON Schema for its input.
+  - term: Resource
+    definition: Read-only data, addressed by a URI, that the application can add as context.
+  - term: Prompt
+    definition: A reusable template the user picks explicitly, often shown as a slash command.
+  - term: Streamable HTTP
+    definition: The MCP transport for remote servers. The client sends JSON-RPC messages with HTTP POST to one endpoint.
+  - term: JSON-RPC
+    definition: A small protocol for calling methods with JSON messages. MCP messages are JSON-RPC 2.0.
+  - term: OAuth
+    definition: The standard for signing in an application on your behalf. Your agent gets an access token without you ever copying it.
 extensions: [quiz, mcp, filesystem]
 help: |
   The learner connects their own editor's agent to this platform over MCP. Help them with the
@@ -38,17 +62,11 @@ sections:
         estimated_minutes: 4
         body: |
           Every AI coding agent needs context: your files, your issue tracker, your database schema.
-          Before MCP, each agent shipped its own bespoke integrations, and every tool vendor had to
-          build one plugin per agent.
+          Before MCP, each agent shipped its own integrations, and every tool vendor had to build
+          one plugin per agent.
 
           **MCP turns that N×M problem into N+M.** A tool exposes its capabilities once as an
           *MCP server*; any agent that speaks MCP can use it.
-
-          Three roles are involved:
-
-          - **Host** — the application you interact with, such as VS Code.
-          - **Client** — the connector inside the host that maintains a session with one server.
-          - **Server** — the program exposing capabilities, like this learning platform.
 
           Messages are JSON-RPC 2.0. Local servers usually run as a child process over *stdio*;
           remote servers, like ours, use the **Streamable HTTP** transport: the client POSTs requests
@@ -65,30 +83,69 @@ sections:
 
           You never copy a token by hand, and nothing secret ends up in a configuration file.
 
-      - id: primitives
-        type: interactive_content
-        title: Tools, resources and prompts
-        estimated_minutes: 5
+      - id: roles
+        type: diagram
+        title: Host, client and server
+        estimated_minutes: 3
+        body: |
+          This is the setup you are about to build. Select each box to see what it is
+          responsible for.
         config:
-          panels:
-            - title: Tools
-              body: |
-                Functions the **model** decides to call, such as `create_issue` or `run_query`.
-                Each tool declares a name, a description and a JSON Schema for its input. Tools
-                can have side effects, which is why hosts ask you before running them.
-            - title: Resources
-              body: |
-                Read-only data the **application** can attach as context: a file, a table schema,
-                a log excerpt. Resources are addressed by URI, e.g. `file:///src/main.rs`.
-            - title: Prompts
-              body: |
-                Reusable templates the **user** picks explicitly, often surfaced as slash commands.
-                A prompt can take arguments and expand into a full message sequence.
-            - title: Who is in control?
-              body: |
-                A useful rule of thumb: tools are model-controlled, resources are
-                application-controlled, prompts are user-controlled. Picking the right primitive is
-                mostly a question of who should decide when it is used.
+          nodes:
+            - { id: you, label: You, kind: person, row: 0, col: 0, detail: "You ask your agent something in the chat of your editor." }
+            - { id: host, label: "VS Code (host)", kind: app, row: 0, col: 1, detail: "The **host** is the application you work in. It runs the model conversation and starts one MCP client per configured server." }
+            - { id: client, label: MCP client, kind: tool, row: 0, col: 2, detail: "The **client** keeps the session with one server: it signs in, lists the tools and sends the calls the model wants to make." }
+            - { id: server, label: "Learning platform (server)", kind: app, row: 1, col: 2, detail: "The **server** offers tools such as `get_project` and `get_current_step`, and decides what each caller may see." }
+            - { id: model, label: Language model, kind: model, row: 1, col: 1, detail: "The model only *proposes* tool calls. The host and client execute them." }
+          edges:
+            - { from: you, to: host, label: chat }
+            - { from: host, to: model, label: prompt + tools }
+            - { from: host, to: client }
+            - { from: client, to: server, label: JSON-RPC over HTTP }
+
+      - id: primitives
+        type: explanation
+        title: Tools, resources and prompts
+        estimated_minutes: 4
+        body: |
+          An MCP server can offer three kinds of things:
+
+          - **Tools** are functions the **model** decides to call, such as `create_issue` or
+            `get_current_step`. Each tool has a name, a description and a JSON Schema for its
+            input. Tools can have side effects, which is why hosts ask you before running them.
+          - **Resources** are read-only data the **application** can attach as context: a file,
+            a table schema, a log excerpt. They are addressed by URI, e.g. `file:///src/main.rs`.
+          - **Prompts** are reusable templates the **user** picks explicitly, often shown as slash
+            commands.
+
+          A useful rule of thumb: tools are model-controlled, resources are application-controlled,
+          prompts are user-controlled. Picking the right primitive is mostly a question of who
+          should decide when it is used.
+
+      - id: place-roles
+        type: diagram_exercise
+        title: Put the roles in place
+        estimated_minutes: 3
+        config:
+          prompt: Drag each label to the right box. One label does not belong anywhere.
+          nodes:
+            - { id: you, label: You, kind: person, row: 0, col: 0 }
+            - { id: host, slot: true, row: 0, col: 1 }
+            - { id: client, slot: true, row: 0, col: 2 }
+            - { id: server, slot: true, row: 1, col: 2 }
+            - { id: model, label: Language model, kind: model, row: 1, col: 1 }
+          edges:
+            - { from: you, to: host, label: chat }
+            - { from: host, to: model }
+            - { from: host, to: client }
+            - { from: client, to: server, label: JSON-RPC }
+          chips:
+            - { id: host, label: Host (your editor) }
+            - { id: client, label: MCP client }
+            - { id: server, label: MCP server (the platform) }
+            - { id: resource, label: Resource }
+        validation:
+          slots: { host: host, client: client, server: server }
 
       - id: check-basics
         type: quiz
@@ -111,22 +168,15 @@ sections:
                 - { id: tools, text: Tools, correct: true }
                 - { id: resources, text: Resources }
                 - { id: prompts, text: Prompts }
-            - id: roles
-              prompt: In VS Code with Copilot connected to this platform, what is VS Code?
-              explanation: VS Code is the host. It creates one client per configured server.
-              options:
-                - { id: host, text: The host, correct: true }
-                - { id: server, text: The server }
-                - { id: transport, text: The transport }
             - id: authorization
               prompt: How does an MCP client find out where to sign in to a remote server?
               explanation: The 401 response points to the protected resource metadata, which names the authorization server and its endpoints.
               options:
-                - { id: challenge, text: From the server's 401 response and its OAuth metadata, correct: true }
+                - { id: challenge, text: "From the server's 401 response and its OAuth metadata", correct: true }
                 - { id: config, text: You paste the sign-in URL into the configuration file }
                 - { id: none, text: Remote MCP servers cannot require authentication }
 
-      - id: review-primitives
+      - id: review-basics
         type: conditional
         title: Quick review
         config:
@@ -136,38 +186,44 @@ sections:
 
           1. **stdio vs HTTP.** stdio requires the host to start the server as a local process.
              A platform running elsewhere can only be reached over HTTP.
-          2. **Host vs client.** The host is the application; it spins up one client per server
-             connection. One VS Code window can hold many clients.
-          3. **Discovery.** Clients don't need to be told where to sign in. The server's `401`
+          2. **Discovery.** Clients don't need to be told where to sign in. The server's `401`
              response leads them to the OAuth metadata, and from there to the sign-in page.
 
   - id: connect
     title: Connect your agent
-    description: Configure VS Code and prove the connection works.
+    description: Configure your editor and prove the connection works.
     steps:
+      - id: previous-course
+        type: prerequisite
+        title: Your project is ready
+        config:
+          courses: [project-setup]
+        body: You need the project folder from "Start your project" for the rest of this course.
+
       - id: config-example
         type: code_example
         title: A configuration without secrets
         estimated_minutes: 3
         body: |
-          VS Code reads the MCP servers of a workspace from `.vscode/mcp.json`. Each entry under
-          `servers` needs only a transport type and a URL.
+          VS Code reads the MCP servers of a project from `.mcp.json` in the root of the project
+          folder, the same file other agents read. Each entry under `mcpServers` needs only a
+          transport type and a URL; `tools` lists which of the server's tools the agent may use.
 
           Notice what is **not** in it: no token, no `Authorization` header and no `inputs`
           prompt. The platform supports OAuth, so your editor signs you in through the browser
-          and keeps the credentials itself. That makes the file safe to commit and share with
-          your team, and it works in the Copilot harness, which can't forward prompted secrets.
+          and keeps the credentials itself. That makes the file safe to commit.
         config:
           snippets:
-            - filename: .vscode/mcp.json
+            - filename: .mcp.json
               language: json
               caption: Credentials come from signing in, never from the file.
               code: |
                 {
-                  "servers": {
+                  "mcpServers": {
                     "learning-platform": {
                       "type": "http",
-                      "url": "http://localhost:8080/mcp"
+                      "url": "http://localhost:8080/mcp",
+                      "tools": ["*"]
                     }
                   }
                 }
@@ -183,7 +239,8 @@ sections:
               "{{root}}": {
                 "learning-platform": {
                   "type": "{{transport}}",
-                  "url": "http://localhost:8080/{{path}}"
+                  "url": "http://localhost:8080/{{path}}",
+                  "tools": ["*"]
                 }
               }
             }
@@ -193,7 +250,7 @@ sections:
             - { id: path, hint: The endpoint path of the platform's MCP server. }
         validation:
           answers:
-            root: [servers]
+            root: [mcpServers]
             transport: [http]
             path: [mcp]
 
@@ -202,46 +259,77 @@ sections:
         title: Sign in and call a tool
         estimated_minutes: 5
         body: |
-          1. Save the configuration from the previous step as `.vscode/mcp.json` in any project
-             and open that folder in VS Code.
-          2. Start a chat session in the **Copilot** harness. The `learning-platform` server
-             shows that it needs authentication. Choose **Authenticate** in the server's actions.
+          1. Save the configuration as `.mcp.json` in the root of your project folder and open
+             that folder in VS Code.
+          2. Start a chat in agent mode. The `learning-platform` server shows that it needs
+             authentication. Choose **Authenticate** in the server's actions.
           3. Your browser opens this platform and asks you to allow access. Sign in if needed,
              then select **Allow**. Return to VS Code once it says you can close the tab.
           4. Ask your agent: **"Use the learning platform to show my current step."**
 
-          Your agent will call `get_current_step`. As soon as it does, this step completes.
+          Your agent calls `get_current_step`. As soon as it does, this step completes.
         help: |
-          If the server doesn't show up, check the file name and location (`.vscode/mcp.json` in the
-          opened folder) and the JSON syntax. If sign-in doesn't start, check that the server is started and the URL ends in
+          If the server doesn't show up, check the file name and location (`.mcp.json` in the root of
+          the opened folder), the `mcpServers` key and the JSON syntax. If sign-in doesn't start, check that the URL ends in
           /mcp. Ask what the editor's MCP output or log shows.
         config:
           server_name: learning-platform
         validation:
           required_tool: get_current_step
 
+      - id: fetch-project
+        type: filesystem_validation
+        title: Let your agent fetch your seed data
+        estimated_minutes: 5
+        body: |
+          Now let the connection do something useful for {{theme.data.site.name}}. Ask your agent:
+
+          > Use the learning platform's `get_project` tool. Save the catalog from the seed data as
+          > `data/items.json` and the site pages as `data/pages.json`, exactly as they are. Then add
+          > a short description of the site to `README.md`. When you're done, submit the files
+          > for step `fetch-project`.
+
+          Read the files your agent creates: this is the data your website will serve from the
+          next course on, and the data the hidden checks expect.
+        help: |
+          The agent should copy `seed_data.items` and `seed_data.pages` from get_project unchanged,
+          as JSON arrays. Then it submits data/items.json, data/pages.json and README.md with
+          report_task_result. If a check fails, compare the file with the get_project output.
+        validation:
+          files:
+            - path: data/items.json
+              label: data/items.json contains the catalog
+              contains: ["{{theme.probes.catalog.item_id}}", "{{theme.data.items.0.id}}"]
+            - path: data/pages.json
+              label: data/pages.json contains the site pages
+              contains: ["{{theme.data.pages.0.id}}"]
+            - path: README.md
+              label: README.md describes {{theme.data.site.name}}
+              min_length: 40
+              contains: ["{{theme.data.site.name}}"]
+
       - id: verify-config
         type: configuration_validation
         title: Let your agent submit the configuration
         estimated_minutes: 3
         body: |
-          Ask your agent: **"Submit my .vscode/mcp.json to the learning platform for step
-          verify-config."** It will call `report_task_result` with the file.
+          Ask your agent: **"Submit my .mcp.json to the learning platform for step
+          verify-config."** It calls `report_task_result` with the file.
 
           The platform checks that the server uses HTTP, points at `/mcp`, and that no
-          credentials are hardcoded in the file.
+          credentials are hardcoded in the file. Commit your work afterwards.
         config:
-          file: .vscode/mcp.json
+          file: .mcp.json
           format: json
         validation:
           rules:
-            - pointer: /servers/*/type
+            - pointer: /mcpServers/*/type
               equals: http
               label: The server uses the HTTP transport
-            - pointer: /servers/*/url
+            - pointer: /mcpServers/*/url
               contains: /mcp
               label: The URL points at the MCP endpoint
-            - pointer: /servers/*/headers/Authorization
+            - pointer: /mcpServers/*/headers/Authorization
               absent: true
               label: No token is hardcoded; the agent signs in with OAuth instead
 
@@ -267,5 +355,6 @@ sections:
         title: You're connected
         depends_on: [verify-config]
         body: |
-          Your agent can now talk to the platform. Later courses use this connection to verify the
-          things you build.
+          Your agent can talk to the platform, and your workspace has the seed data for
+          {{theme.data.site.name}}. Next, you teach your agent the conventions of your project
+          with a skill.

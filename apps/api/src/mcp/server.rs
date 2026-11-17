@@ -14,12 +14,15 @@ use uuid::Uuid;
 use crate::domains::authoring::service as authoring;
 use crate::domains::integrations::domain::McpPrincipal;
 use crate::domains::integrations::repository as connections;
+use crate::domains::learners::repository as learners;
 use crate::domains::sessions::dto::ProgressDto;
 use crate::domains::sessions::service::{SessionService, SessionSnapshot};
 use crate::error::ApiError;
 use crate::state::AppState;
 
 const INSTRUCTIONS: &str = "This server belongs to the learning platform the user is taking courses on. \
+The learner builds one website throughout the course track: call get_project for its theme, the \
+learner's chosen programming language and the seed data the site loads. \
 Call get_current_step to see what the learner should do next, including the evidence format. \
 When the learner has finished a practical task, collect the requested evidence from their workspace \
 and send it with report_task_result. Never invent evidence; report what is actually in the workspace. \
@@ -213,6 +216,39 @@ impl LearningPlatformServer {
             }
             Err(error) => Ok(tool_error(&error)),
         }
+    }
+
+    #[tool(
+        description = "The learner's project: the kind of website they build throughout the course track, their programming language, their interface language, and the seed data (catalog items and site texts) their site loads. Read it before helping with a practical step."
+    )]
+    async fn get_project(
+        &self,
+        Extension(parts): Extension<Parts>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let principal = principal(&parts)?;
+        // Counts as activity in the learner's current course, if they have one.
+        let _ = self.begin("get_project", &parts, None).await;
+        let profile = match learners::profile(&self.state.db, principal.user_id).await {
+            Ok(profile) => profile,
+            Err(error) => return Ok(tool_error(&error.into())),
+        };
+        let Some(project) = profile.project else {
+            return Ok(CallToolResult::structured(json!({
+                "project": null,
+                "message": "The learner has not chosen a project yet. They do that in the first course, \"Start your project\", in the web app.",
+            })));
+        };
+        let theme = self.state.themes.get(&project.theme_id);
+        Ok(CallToolResult::structured(json!({
+            "project": {
+                "theme": theme.map(|theme| theme.summary(profile.locale)),
+                "stack": project.stack,
+                "chosen_at": project.created_at,
+            },
+            "learner_language": profile.locale,
+            "seed_data": theme.map(|theme| theme.data()),
+            "note": "Explain things in the learner's language, but keep technical terms (embedding, endpoint, prompt, …) in English. Coach; let the learner write the code.",
+        })))
     }
 
     #[tool(

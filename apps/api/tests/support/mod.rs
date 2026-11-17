@@ -168,6 +168,21 @@ impl TestUser {
             .unwrap()
     }
 
+    pub async fn send(&self, method: reqwest::Method, path: &str, body: Option<Value>) -> Response {
+        let request = self
+            .client
+            .request(method, format!("{}{path}", self.base))
+            .header("cookie", &self.cookie)
+            .header("x-requested-with", "lp-web");
+        match body {
+            Some(body) => request.json(&body),
+            None => request,
+        }
+        .send()
+        .await
+        .unwrap()
+    }
+
     pub async fn json(&self, path: &str) -> Value {
         let response = self.get(path).await;
         assert!(

@@ -206,10 +206,47 @@ sections:
 
     let context = EngineContext {
         completed_courses: ["basics".to_owned()].into(),
+        ..EngineContext::default()
     };
     engine.settle(&course, &mut progress, &context);
     assert_eq!(progress.status("gate"), StepStatus::Completed);
     assert_eq!(progress.status("body"), StepStatus::Available);
+}
+
+#[test]
+fn project_setup_completes_once_the_learner_has_a_project() {
+    let engine = support::engine();
+    let yaml = r#"
+id: setup
+version: 1.0.0
+title: Setup
+summary: S
+description: D
+category: C
+difficulty: beginner
+estimated_minutes: 5
+sections:
+  - id: s
+    title: S
+    steps:
+      - { id: choose, type: project_setup, title: Choose }
+      - { id: next, type: explanation, title: Next, body: Text }
+"#;
+    let course = support::compile(&engine, yaml);
+    let (mut progress, _) = engine.start(&course, &EngineContext::default());
+    assert_eq!(progress.status("choose"), StepStatus::Available);
+    assert_eq!(progress.status("next"), StepStatus::Locked);
+
+    // Learners open the step before choosing; it must still complete afterwards.
+    engine.open_step(&course, &mut progress, "choose").unwrap();
+    assert_eq!(progress.status("choose"), StepStatus::InProgress);
+    let context = EngineContext {
+        has_project: true,
+        ..EngineContext::default()
+    };
+    engine.settle(&course, &mut progress, &context);
+    assert_eq!(progress.status("choose"), StepStatus::Completed);
+    assert_eq!(progress.status("next"), StepStatus::Available);
 }
 
 #[test]

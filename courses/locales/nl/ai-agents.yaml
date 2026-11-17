@@ -1,0 +1,187 @@
+title: AI agents
+summary: Bouw een agent die plant, over meerdere stappen tools gebruikt, binnen zijn grenzen blijft en weet wanneer hij moet stoppen of iets moet vragen.
+description: |
+  Een agent is een model dat in een loop draait: het kiest de volgende actie, roept een tool aan,
+  bekijkt het resultaat en herhaalt dat tot het doel bereikt is. De loop is simpel. Hem
+  betrouwbaar maken is het vak: goede tools, duidelijke stopregels, budgetten, guardrails en
+  traces waarmee je kunt debuggen.
+
+  Je bouwt een voorraadagent voor de backoffice van {{theme.data.site.name}}: hij houdt de
+  voorraad bij van de spullen waar elke {{theme.business}} op draait, berekent wat er besteld moet
+  worden en zet inkooporders klaar die een mens goedkeurt. Het platform geeft hem verborgen taken
+  die meerdere tool calls en exacte berekeningen vragen, plus verzoeken die hij moet weigeren of
+  niet kan uitvoeren. De antwoorden van je agent en zijn trace worden stap voor stap
+  gecontroleerd.
+category: AI agents
+objectives:
+  - De agent loop bouwen met tools, een maximum aantal stappen en stopvoorwaarden
+  - Tools zo ontwerpen dat het model nooit exact werk uit het hoofd hoeft te doen
+  - Guardrails toevoegen voor destructieve, onmogelijke of onduidelijke verzoeken
+  - Elke stap vastleggen, zodat je gedrag kunt debuggen en evalueren
+prerequisites: [Bouw je eigen MCP server]
+glossary:
+  Agent: Een model dat in een loop draait, de volgende actie kiest, een tool aanroept, het resultaat bekijkt en dat herhaalt tot het doel bereikt is.
+  Agent loop: Beslissen, handelen, bekijken, herhalen — tot het klaar is, vastloopt of het budget op is.
+  Budget: Een harde grens op het aantal stappen, tokens of de tijd per run. Stopt loops die doorslaan en maakt mislukkingen zichtbaar.
+  Guardrail: Een regel, afgedwongen in code of tools, die voorkomt dat een agent iets doet wat niet mag.
+  Human in the loop: De agent zet belangrijke acties klaar; een mens keurt ze goed voordat ze gebeuren.
+  Trace: Het verslag van elke stap die een agent zette — tool, input, output. Agents debug en evalueer je aan de hand van traces.
+  Status: Een expliciete uitkomst van een run, zoals completed, needs_input, refused of failed.
+sections:
+  concepts:
+    title: Hoe agents werken
+    steps:
+      loop:
+        title: De agent loop
+        body: |
+          ```text
+          doel ──► model beslist ──► tool call ──► resultaat bekijken ──┐
+                      ▲                                                │
+                      └──────────── tot het klaar is, vastloopt of het budget op is
+          ```
+
+          Vergeleken met een losse tool call doet een agent dit:
+
+          - **plannen en opnieuw plannen**: hij deelt een doel op in stappen en past zich aan als
+            een resultaat verrast;
+          - **toestand bijhouden**: het gesprek (en soms een kladblok of geheugen) bevat wat hij
+            tot nu toe weet;
+          - **beslissen wanneer hij stopt**: antwoorden, de gebruiker iets vragen, of opgeven.
+
+          Wat agents in de praktijk betrouwbaar maakt:
+
+          1. **Tools doen het exacte werk.** Opzoeken, filteren en rekenen gebeurt in code. Het
+             model kiest en combineert. Een tool `calculate` wint het altijd van hoofdrekenen.
+          2. **Budgetten.** Beperk het aantal stappen, tokens en de tijd per taak. Een vastgelopen
+             agent die eindeloos doorgaat is duur en verbergt de fout.
+          3. **Expliciete uitkomsten.** Sluit elke run af met een status, zoals *completed*,
+             *needs_input*, *refused* of *failed*, in plaats van een vage alinea.
+          4. **Guardrails.** Sommige acties mogen nooit, andere alleen met goedkeuring van een
+             mens. Dwing dat af in code en tools, niet alleen in de prompt.
+          5. **Traces.** Leg elke stap vast (tool, input, output). Wat je niet ziet, kun je niet
+             verbeteren, en evaluaties draaien op traces.
+      agent-shape:
+        title: De onderdelen van je agent
+        config:
+          nodes:
+            - { id: task, label: Taak, detail: "Bijvoorbeeld: *Welke voorraden zitten onder hun bestelpunt?*" }
+            - { id: model, label: Model beslist, detail: "Kiest de volgende tool call, of sluit de run af met een status en een antwoord." }
+            - { id: tools, label: Tools in je code, detail: "Opzoeken, rekenen en orders **klaarzetten**. Er is geen tool die orders verstuurt of data verwijdert." }
+            - { id: guard, label: Budget + guardrails, detail: "Hooguit 12 stappen, en regels die in code worden afgedwongen, niet alleen in de prompt." }
+            - { id: trace, label: Trace, detail: "Elke stap wordt vastgelegd, zodat je ziet *waarom* een run misging." }
+          edges:
+            - {}
+            - { label: aanroep }
+      design-choices:
+        title: Ontwerpkeuzes
+        body: |
+          - **Agent of workflow?** Kun je de stappen tekenen als een vast stroomschema, bouw dan een
+            workflow (de laatste cursus van het traject). Gebruik een agent als de route afhangt van
+            wat hij ontdekt. Agents zijn flexibeler en minder voorspelbaar.
+          - **Human in the loop.** Laat de agent belangrijke acties (orders, e-mails, betalingen)
+            *klaarzetten* en laat een mens ze goedkeuren. Tools die iets klaarzetten mag hij vrij
+            aanroepen; versturen niet.
+          - **Context beheren.** Lange runs vullen de context. Vat oude stappen samen, houd tool
+            results kort en haal details op als ze nodig zijn in plaats van alles vooraf mee te
+            geven.
+          - **Frameworks.** Agent-frameworks en SDK's schelen boilerplate, maar de loop, tools,
+            budgetten en traces zijn overal hetzelfde. Bouw je het één keer met de hand, dan
+            begrijp en debug je elk framework makkelijk.
+          - **Evaluatie.** Houd een set taken met verwachte uitkomsten bij, inclusief taken die de
+            agent moet weigeren, en draai die bij elke wijziging van prompt, tool of model.
+            Controleer het eindantwoord *én* de trace.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: math
+              prompt: De agent moet uitrekenen wat het kost om 26 pakken cadeaudozen à 18,50 bij te bestellen. Wat is de betrouwbaarste aanpak?
+              explanation: Exact werk hoort in tools. Het model bepaalt wat er berekend moet worden; code rekent.
+              options:
+                - { id: head, text: "Het model het laten uitrekenen in zijn redenering" }
+                - { id: tool, text: "De agent een rekentool geven, of het binnen een tool berekenen" }
+                - { id: bigger, text: "Een groter model nemen zodat het rekenwerk klopt" }
+            - id: budget
+              prompt: Waarom geef je elke run een maximum aantal stappen?
+              explanation: Budgetten stoppen loops die doorslaan, begrenzen kosten en maken van "vastgelopen" een zichtbare fout.
+              options:
+                - { id: cost, text: "Om doorslaande loops te stoppen en fouten zichtbaar te maken" }
+                - { id: quality, text: "Minder stappen geven altijd betere antwoorden" }
+                - { id: provider, text: "Providers eisen het" }
+            - id: destructive
+              prompt: Waar hoort de regel "verwijder nooit leveranciersdata" te worden afgedwongen?
+              explanation: Prompts kun je omzeilen. Bied de mogelijkheid niet aan, of dwing het af in de tool en de code.
+              options:
+                - { id: prompt, text: "Alleen in de system prompt" }
+                - { id: code, text: "In de tools en code, bijvoorbeeld door helemaal geen delete-tool aan te bieden" }
+                - { id: user, text: "Vertrouwen dat de gebruiker het niet vraagt" }
+            - id: unknown
+              prompt: Iemand vraagt een product te bestellen dat niet bestaat. Wat hoort de agent te doen?
+              explanation: Stoppen met een duidelijke status needs_input of failed en uitleggen wat er ontbreekt, in plaats van een product te gokken.
+              options:
+                - { id: guess, text: "Het meest vergelijkbare product bestellen" }
+                - { id: stop, text: "Stoppen met een duidelijke status en uitleggen wat er ontbreekt" }
+                - { id: retry, text: "Blijven zoeken tot het budget op is" }
+  build:
+    title: Bouw de agent
+    steps:
+      previous-course:
+        title: Je MCP server werkt
+      world:
+        title: De voorraadkamer en het contract
+        body: |
+          Voeg `POST /api/agent/run` toe aan je server. Het ontvangt `{"task": "..."}` en draait je
+          agent, met een model naar keuze dat tool calling ondersteunt. Geef hem tools over de
+          voorraaddata hieronder. Voorgestelde tools: `list_products`, `get_product`,
+          `get_supplier`, `calculate` en `draft_purchase_order` (zet een concept klaar voor
+          goedkeuring door een mens; er is geen tool die orders verstuurt of data verwijdert).
+
+          Definities: een product heeft een **lage voorraad** als `stock` *onder* zijn
+          `reorder_point` zit. Bijbestellen betekent `target - stock` stuks bestellen tegen
+          `unit_cost`.
+
+          Antwoord met:
+
+          ```json
+          {
+            "status": "completed",
+            "answer": "Drie voorraden zijn bijna op: …",
+            "result": { "ids": ["P-1xx"] },
+            "steps": [ { "tool": "list_products", "input": {}, "output": "…" } ]
+          }
+          ```
+
+          - `status` is `completed`, `needs_input`, `refused` of `failed`.
+          - `result` bevat gestructureerde waarden als een taak daarom vraagt (anders `{}`), zoals
+            product-id's of totalen. Id's veranderen nooit, in welke taal je agent ook antwoordt.
+          - `steps` bevat elke tool call, op volgorde. Beperk runs tot **12 stappen**.
+      agent:
+        title: Voer de agent-checks uit
+        body: |
+          Het platform geeft je agent zes verborgen taken tegelijk. De eerste moet slagen, plus
+          minstens vier van de andere vijf. Elke taak controleert de status, het antwoord of
+          resultaat en de trace, inclusief dat de agent binnen 12 stappen blijft.
+        validation:
+          cases:
+            - { id: low-stock, label: Vindt de voorraden onder hun bestelpunt }
+            - { id: restock-cost, label: Berekent de exacte kosten van bijbestellen }
+            - { id: supplier, label: Combineert product- en leveranciersdata }
+            - { id: draft-orders, label: Zet inkooporders klaar in plaats van te beweren dat ze verstuurd zijn }
+            - { id: destructive, label: Weigert een destructief verzoek }
+            - { id: unknown-product, label: Stopt netjes als een product niet bestaat }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Wat zou je monitoren?
+        config:
+          prompt: Je agent gaat live in de backoffice van {{theme.data.site.name}}. Wat zou je monitoren en waarop zou je alarm slaan, en waarom?
+        validation:
+          required_concepts:
+            - { label: traces, any_of: [trace, steps, tool, log, observability, stap, stappen] }
+            - { label: kosten of fouten, any_of: [cost, token, fail, error, budget, latency, refus, kosten, fout, mislukt, wachttijd, weiger] }
+      finish:
+        title: Je agent werkt
+        body: |
+          Je agent plant, handelt, blijft binnen zijn grenzen en weet wanneer hij moet stoppen.
+          Hierna verbind je de feiten over {{theme.data.site.name}} in een knowledge graph.

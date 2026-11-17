@@ -4,6 +4,7 @@
 
 use chrono::{DateTime, Utc};
 use lp_course_engine::view::{CourseSummaryView, course_summary};
+use lp_course_engine::{Audience, Locale};
 use lp_course_engine::{Course, CourseIssue, parse_definition, render_definition};
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -90,10 +91,36 @@ fn compile(state: &AppState, source: &str) -> Result<Course, Vec<CourseIssue>> {
     }
     let definition = parse_definition(source)
         .map_err(|message| vec![CourseIssue::new("(document)", message)])?;
-    state
+    let course = state
         .engine
         .compile(definition)
-        .map_err(|error| error.issues)
+        .map_err(|error| error.issues)?;
+    // Every learner sees a rendered copy, so it must render for every language and theme.
+    let mut issues = Vec::new();
+    for theme in state
+        .themes
+        .selectable()
+        .iter()
+        .chain([state.themes.neutral()])
+    {
+        for locale in Locale::ALL {
+            if let Err(error) = state.engine.render(
+                &course,
+                Audience {
+                    locale,
+                    theme: theme.as_ref(),
+                },
+            ) {
+                issues.extend(error.issues);
+            }
+        }
+    }
+    issues.dedup();
+    if issues.is_empty() {
+        Ok(course)
+    } else {
+        Err(issues)
+    }
 }
 
 pub async fn publish(state: &AppState, source: &str, author: Uuid) -> ApiResult<PublishResult> {

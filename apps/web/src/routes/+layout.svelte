@@ -3,11 +3,13 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import { auth } from '#lib/state/auth.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
-	const standalone = ['/login', '/register', '/connect/authorize'];
+	// Pages with their own chrome: the landing pages and the sign-in flow.
+	const standalone = ['/', '/nl/', '/login', '/register', '/connect/authorize'];
 
 	onMount(() => {
 		void auth.load();
@@ -15,11 +17,11 @@
 </script>
 
 <svelte:head>
-	<title>Learning Platform</title>
-	<meta name="description" content="Learn AI development by building real things with your own agent." />
+	<title>{t('app.name')}</title>
+	<meta name="description" content={t('app.description')} />
 </svelte:head>
 
-{#if standalone.includes(page.url.pathname)}
+{#if standalone.includes(page.url.pathname) || page.url.pathname === '/nl'}
 	{@render children()}
 {:else}
 	<AppShell>{@render children()}</AppShell>

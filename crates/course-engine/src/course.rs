@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use lp_core::{CompletionStrategy, StepCategory};
 use serde_json::Value;
 
-use crate::definition::{CourseDefinition, Difficulty, PrerequisiteDefinition};
+use crate::definition::{CourseDefinition, Difficulty, GlossaryEntry, PrerequisiteDefinition};
 
 /// A validated, flattened course ready for execution.
 #[derive(Debug, Clone)]
@@ -21,6 +21,7 @@ pub struct Course {
     pub tags: Vec<String>,
     pub objectives: Vec<String>,
     pub prerequisites: Vec<PrerequisiteDefinition>,
+    pub glossary: Vec<GlossaryEntry>,
     pub extensions: Vec<String>,
     pub sections: Vec<SectionOutline>,
     pub steps: Vec<CourseStep>,
@@ -84,6 +85,7 @@ impl Course {
             tags: definition.tags.clone(),
             objectives: definition.objectives.clone(),
             prerequisites: definition.prerequisites.clone(),
+            glossary: definition.glossary.clone(),
             extensions,
             sections,
             steps,

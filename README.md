@@ -13,11 +13,18 @@ do the rest; adding a course needs no backend, frontend or database changes.
 Listed by difficulty as a learning path. Every practical step is verified by the platform, and
 every step has a **Help** button with a coaching prompt for the learner's own agent.
 
-| Level | Courses | Proof |
+The courses form **one ordered track**. In the first course each learner picks one of ten
+website themes (bike rental, bakery, bookshop, …) and a language to code in; every later
+course adds a part to that same website. Course text is written once with `{{theme.…}}`
+placeholders, and each theme in `courses/themes/` supplies wording, seed data and the hidden
+test probes that fit it. Everything is available in English and Dutch (`courses/locales/nl/`),
+with technical terms kept in English.
+
+| Phase | Courses | Proof |
 | --- | --- | --- |
-| Beginner | MCP connection, tool calling, agent skills, semantic matching | agent events, submitted config, hidden tool calls and paraphrase queries |
-| Intermediate | vector databases, multimodal AI, RAG, advanced skills, build an MCP server | hidden search queries and live upserts, unseen receipt images, grounded Q&A with injection and unanswerable questions, exact script output, MCP client session |
-| Advanced | AI agents, knowledge graphs, agentic workflows | multi-step tasks with traces and refusals, entity resolution and multi-hop queries, ticket pipeline with routing and guardrails |
+| Foundations | start your project, MCP connection, agent skills, first page + catalog API | agent events, files fetched with `get_project`, submitted skill, catalog API checks |
+| Make it smart | tool calling, semantic search, vector databases, multimodal AI, RAG | hidden tool calls, theme-specific paraphrase queries (e.g. "fiets voor moeder"), live upserts, unseen receipt images, grounded Q&A about the learner's own site pages |
+| Go further | advanced skills, MCP server, AI agents, knowledge graphs, agentic workflows | exact script output, MCP client session against the learner's catalog, multi-step tasks with traces, multi-hop queries, ticket pipeline with guardrails |
 
 Learners build services in any language with any model provider. Their **browser** sends the
 hidden test requests to the service (so `localhost` works and nothing is exposed) and the API
@@ -43,7 +50,8 @@ pnpm db:setup                # only if PostgreSQL isn't set up yet (see below)
 pnpm dev                     # PostgreSQL check + API (:8080) + web (:5173)
 ```
 
-Open <http://localhost:5173>, create an account, and start **Connect your AI agent over MCP**.
+Open <http://localhost:5173> for the landing page (`/nl/` in Dutch), create an account, and
+start **Start your project**.
 
 Run pieces independently:
 
@@ -75,12 +83,12 @@ The MCP endpoint is an OAuth 2.1 protected resource, so agents sign in through t
 instead of handling tokens. This works in VS Code's Copilot harness, which cannot forward
 `${input:…}` secrets.
 
-1. Add the server to `.vscode/mcp.json` — no token, header or input prompt needed:
+1. Add the server to `.mcp.json` in the project root — no token, header or input prompt needed:
 
    ```json
    {
-     "servers": {
-       "learning-platform": { "type": "http", "url": "http://localhost:8080/mcp" }
+     "mcpServers": {
+       "learning-platform": { "type": "http", "url": "http://localhost:8080/mcp", "tools": ["*"] }
      }
    }
    ```

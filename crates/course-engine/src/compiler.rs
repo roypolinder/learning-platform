@@ -7,6 +7,7 @@ use crate::builtin::{self, CONDITIONAL, REUSABLE_SECTION, ReusableSectionConfig}
 use crate::course::{Course, CourseStep, SectionOutline};
 use crate::definition::{CompletionMode, CourseDefinition, StepDefinition};
 use crate::error::{CourseIssue, CourseValidationError};
+use crate::localization::{Locale, localize};
 use crate::registry::{ExtensionRegistry, StepTypeRegistry};
 
 const GENERIC_EXTENSION_TYPES: &[&str] = &["external_task", "extension_validation"];
@@ -24,6 +25,8 @@ pub(crate) fn compile(
 ) -> Result<Course, CourseValidationError> {
     let mut issues = Vec::new();
     validate_metadata(&definition, &mut issues);
+    validate_glossary(&definition, &mut issues);
+    validate_translations(&definition, &mut issues);
 
     let (pending, sections) = expand_sections(&definition, &mut issues);
     let mut steps = Vec::with_capacity(pending.len());
@@ -83,15 +86,24 @@ pub(crate) fn compile(
             ));
         }
 
-        for message in builtin::validate(&step) {
-            issues.push(CourseIssue::new(path.clone(), message));
+        // Placeholders such as `{{theme.probes.catalog.count}}` only get their real value
+        // (and type) when the course is rendered for a theme. Such steps are validated on
+        // every rendered copy instead (see `catalog::check_renders`).
+        let templated =
+            has_theme_placeholders(&step.config) || has_theme_placeholders(&step.validation);
+        if !templated {
+            for message in builtin::validate(&step) {
+                issues.push(CourseIssue::new(path.clone(), message));
+            }
         }
 
         if let Some(extension_id) = &extension_id {
             match extensions.get(extension_id) {
                 Some(extension) => {
                     used_extensions.insert(extension_id.clone());
-                    if let Err(messages) =
+                    if templated {
+                        // Validated per rendered copy.
+                    } else if let Err(messages) =
                         extension.validate_config(&step.step_type, &step.config, &step.validation)
                     {
                         issues.extend(
@@ -190,6 +202,38 @@ fn validate_metadata(definition: &CourseDefinition, issues: &mut Vec<CourseIssue
             "sections",
             "at least one section is required",
         ));
+    }
+}
+
+fn validate_glossary(definition: &CourseDefinition, issues: &mut Vec<CourseIssue>) {
+    let mut terms = HashSet::new();
+    for (index, entry) in definition.glossary.iter().enumerate() {
+        if entry.term.trim().is_empty() || entry.definition.trim().is_empty() {
+            issues.push(CourseIssue::new(
+                format!("glossary[{index}]"),
+                "term and definition must not be empty",
+            ));
+        }
+        if !terms.insert(entry.term.to_lowercase()) {
+            issues.push(CourseIssue::new(
+                format!("glossary[{index}].term"),
+                format!("duplicate term `{}`", entry.term),
+            ));
+        }
+    }
+}
+
+/// Translations are checked structurally here; rendering checks the localized steps.
+fn validate_translations(definition: &CourseDefinition, issues: &mut Vec<CourseIssue>) {
+    for locale in definition.translations.keys() {
+        if *locale == Locale::SOURCE {
+            issues.push(CourseIssue::new(
+                format!("translations.{locale}"),
+                "courses are written in this language; no translation needed",
+            ));
+        } else if let Err(problems) = localize(definition, *locale) {
+            issues.extend(problems);
+        }
     }
 }
 
@@ -430,6 +474,15 @@ fn resolve_required_steps(
             .filter(|step| !step.optional)
             .map(|step| step.id.clone())
             .collect(),
+    }
+}
+
+fn has_theme_placeholders(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.contains("{{theme.") || text.contains("{{ theme."),
+        Value::Array(items) => items.iter().any(has_theme_placeholders),
+        Value::Object(fields) => fields.values().any(has_theme_placeholders),
+        _ => false,
     }
 }
 

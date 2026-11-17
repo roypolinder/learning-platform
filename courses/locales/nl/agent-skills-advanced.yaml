@@ -1,0 +1,215 @@
+title: Gevorderde skills
+summary: Bouw een skill met een deterministisch script en naslagmateriaal, test wanneer hij triggert en bewijs dat de output precies klopt.
+description: |
+  Simpele skills zijn instructies. Krachtige skills bevatten ook **scripts** voor werk waar
+  modellen slecht in zijn (exact rekenen, parsen, bestanden omzetten), **referentiebestanden** die
+  de agent alleen laadt als het nodig is, en **evals** die laten zien dat de skill op de juiste
+  momenten triggert.
+
+  Je bonnetjesscanner zet bonnen van leveranciers om in uitgaven. Nu wil {{theme.data.site.name}}
+  daar elke maand een overzicht van. Je bouwt met je agent een skill `expense-report`, voert hem
+  uit op een maand aan uitgaven en stuurt het resultaat in. Het platform controleert de opbouw van
+  de skill en dat de output op de cent nauwkeurig klopt.
+category: AI agents
+objectives:
+  - Een skill opbouwen met scripts, references en assets voor progressive disclosure
+  - Deterministisch werk uit het model halen en in scripts stoppen
+  - Trigger evals schrijven die laten zien wanneer een skill wel en niet moet laden
+  - Skills van anderen controleren op beveiligingsrisico's voordat je ze installeert
+prerequisites: ["RAG: antwoorden uit je eigen content"]
+glossary:
+  Scripts: Code in de map `scripts/` van een skill. De agent voert hem uit; alleen de output komt in de context.
+  References: Bestanden in de map `references/` van een skill die de agent alleen leest als de instructies ernaar verwijzen.
+  Progressive disclosure: Een skill in niveaus laden — metadata altijd, instructies bij gebruik, resources alleen als het nodig is.
+  Deterministic: Geeft bij dezelfde input altijd dezelfde output. Rekenen en parsen horen deterministisch te zijn; modellen zijn dat niet.
+  Trigger eval: Een testprompt die een agent een skill wel, of juist niet, moet laten laden.
+  Output eval: Een test die controleert of het resultaat van een skill klopt, het liefst tegen exacte verwachte waarden.
+  Near-miss: Een prompt die dicht bij het domein van een skill ligt maar hem toch niet moet triggeren. Vangt descriptions die te breed zijn.
+shared_sections:
+  agent-connection:
+    steps:
+      reconnect:
+        title: Controleer dat je agent gekoppeld is
+        body: |
+          In deze cursus stuurt je agent bestanden in. Zorg dat de server `learning-platform`
+          gekoppeld is (kies **Authenticate** als je editor zegt dat er authenticatie nodig is) en
+          vraag je agent: **"Wat is mijn huidige stap op het learning platform?"**
+sections:
+  learn:
+    title: Meer dan SKILL.md
+    steps:
+      anatomy:
+        title: Drie niveaus van laden
+        body: |
+          Skills zijn een open, overdraagbaar formaat: een map met een `SKILL.md` die veel agents
+          kunnen laden. Waar de map staat hangt af van je agent, maar de opbouw is hetzelfde:
+
+          ```text
+          expense-report/
+          ├── SKILL.md            # name + description (altijd zichtbaar), instructies (bij gebruik)
+          ├── scripts/
+          │   └── summarize.py    # wordt uitgevoerd, niet gelezen: exact, herhaalbaar werk
+          ├── references/
+          │   └── policy.md       # wordt alleen gelezen als de instructies ernaar verwijzen
+          └── evals/
+              └── evals.json      # wanneer hoort de skill te triggeren, en wat moet hij opleveren?
+          ```
+
+          Agents laden skills in **niveaus**, zodat een skill groot kan zijn zonder de context te
+          vullen:
+
+          1. **Metadata.** De `name` en `description` van elke skill staan altijd in de context.
+          2. **Instructies.** De body van `SKILL.md` wordt geladen als de description past.
+          3. **Resources.** Bestanden in `references/` worden gelezen, en `scripts/` worden
+             *uitgevoerd*, alleen als de instructies daarom vragen. De code van een script hoeft
+             nooit in de context; alleen de output.
+
+          Houd `SKILL.md` kort en stap-voor-stap, en verwijs voor details naar references: *"Lees
+          voor het volledige beleid voor maaltijden `references/policy.md`."*
+      levels:
+        title: Wat wanneer geladen wordt
+        config:
+          nodes:
+            - { id: meta, detail: "Voor elke skill altijd in de context. Zo bepaalt de agent of een skill relevant is." }
+            - { id: body, detail: "Wordt geladen als een vraag bij de description past. Kort en stap-voor-stap." }
+            - { id: refs, detail: "Alleen gelezen als de instructies ernaar verwijzen, bijvoorbeeld het beleid voor uitgaven." }
+            - { id: scripts, detail: "**Uitgevoerd**, niet gelezen. Alleen de output komt in de context, dus een lang script kost niets." }
+          edges:
+            - { label: past }
+            - { label: als nodig }
+            - { label: als nodig }
+      scripts-and-safety:
+        title: Scripts, evals en veiligheid
+        body: |
+          - **Waarom scripts.** Modellen zijn goed in bepalen *wat* er moet gebeuren en slecht in
+            exact, herhalend werk. 200 bedragen optellen, een schema valideren of een bestand
+            omzetten hoort in een script: sneller, goedkoper en elke keer hetzelfde.
+          - **Trigger evals.** Een skill die nooit laadt is nutteloos; een die bij alles laadt is
+            ruis. Houd een kleine set prompts bij die hem *wel* moeten triggeren en near-misses die
+            dat *niet* moeten, en draai ze opnieuw als je de description aanpast.
+          - **Output evals.** Schrijf voor prompts die moeten triggeren op hoe een correct resultaat
+            eruitziet, liefst iets wat je kunt controleren, zoals exacte totalen. Dat doet het
+            platform in deze cursus met je inzending.
+          - **Veiligheid.** Een skill kan een agent code laten uitvoeren. Installeer alleen skills
+            uit bronnen die je vertrouwt, lees hun scripts voordat je ze installeert en kies liever
+            skills die weinig rechten nodig hebben. Behandel een skill als een dependency.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: always-loaded
+              prompt: Welk deel van een skill zit altijd in de context van de agent?
+              explanation: Alleen de metadata (name en description) is altijd geladen; de rest wordt geladen als het nodig is.
+              options:
+                - { id: meta, text: "De name en description uit de frontmatter" }
+                - { id: body, text: "De hele SKILL.md" }
+                - { id: all, text: "Elk bestand in de map van de skill" }
+            - id: arithmetic
+              prompt: De skill moet 200 uitgaveregels exact optellen. Waar hoort dat te gebeuren?
+              explanation: Deterministisch werk hoort in een script; het model bepaalt wanneer het draait en legt het resultaat uit.
+              options:
+                - { id: model, text: "In het redeneren van het model" }
+                - { id: script, text: "In een meegeleverd script dat de agent uitvoert" }
+                - { id: reference, text: "In een referentiebestand" }
+            - id: negative
+              prompt: Waarom neem je in je evals ook prompts op die de skill NIET moeten triggeren?
+              explanation: Near-misses vangen descriptions die te breed zijn, waardoor de skill laadt wanneer dat niet moet.
+              options:
+                - { id: broad, text: "Om descriptions te vangen die te breed zijn" }
+                - { id: speed, text: "Om de agent sneller te maken" }
+                - { id: none, text: "Die zijn niet nuttig" }
+            - id: install
+              prompt: Een collega deelt een skill van internet. Wat doe je voordat je hem installeert?
+              explanation: Skills kunnen een agent code laten uitvoeren. Controleer scripts en instructies zoals bij elke dependency.
+              options:
+                - { id: review, text: "De instructies en scripts lezen, en nagaan waar hij vandaan komt" }
+                - { id: install, text: "Installeren; skills zijn alleen tekst" }
+  build:
+    title: Bouw de skill expense-report
+    steps:
+      previous-course:
+        title: Je assistent werkt
+      requirements:
+        title: De eisen en de data
+        body: |
+          Bouw met je agent een skill met de naam **`expense-report`**, in het project van
+          {{theme.data.site.name}}. Hij zet een CSV met uitgaven om in een overzicht. Eisen:
+
+          - `SKILL.md` heeft frontmatter met `name` en `description`, een sectie `## Steps`, en noemt
+            zowel `scripts/` als `references/`. Houd hem onder de 5.000 tekens.
+          - Een script in `scripts/` (in elke taal) leest de CSV en print de samenvatting als JSON.
+          - `references/policy.md` bevat het uitgavenbeleid hieronder.
+          - `evals/evals.json` bevat trigger evals (zie de volgende stappen).
+
+          **Beleid:** een losse uitgave in de categorie *meals* boven **35.00 EUR** gaat over de
+          limiet (precies 35.00 mag). Rond elk totaal af op 2 decimalen.
+
+          De samenvatting ziet er zo uit (met andere getallen):
+
+          ```json
+          {
+            "total": 100.5,
+            "by_category": { "travel": 50.25, "meals": 30.0, "software": 10.0, "office": 10.25 },
+            "over_limit": ["E-99"]
+          }
+          ```
+      skill-files:
+        title: Stuur de skill in
+        body: |
+          Vraag je agent: **"Stuur de bestanden van mijn skill expense-report (SKILL.md, het script
+          en references/policy.md) naar het learning platform voor stap skill-files."**
+      summary-output:
+        title: Voer de skill uit en stuur de output in
+        body: |
+          Vraag je agent in een nieuwe chat om de uitgaven in `expenses.csv` samen te vatten, zodat
+          de skill via zijn description wordt getriggerd, en het resultaat op te slaan als
+          `expense-summary.json`.
+
+          Vraag daarna: **"Stuur expense-summary.json naar het learning platform voor stap
+          summary-output."** Het platform controleert elk totaal op de cent nauwkeurig en de lijst
+          met uitgaven boven de limiet.
+        validation:
+          rules:
+            - { label: Het totaal klopt precies }
+            - { label: Het totaal voor travel klopt }
+            - { label: Het totaal voor meals klopt }
+            - { label: Het totaal voor software klopt }
+            - { label: Het totaal voor office klopt }
+            - { label: E-02 staat op de lijst boven de limiet }
+            - { label: E-07 staat op de lijst boven de limiet }
+            - { label: Verder staat er niets op de lijst }
+      trigger-evals:
+        title: Stuur je trigger evals in
+        body: |
+          Schrijf `evals/evals.json` in de map van de skill met minstens **vier** cases: prompts die
+          de skill moeten triggeren en near-misses die dat niet moeten doen. Elke case heeft een
+          `prompt`, `should_trigger` en `expected` (hoe een goed resultaat eruitziet, of waarom hij
+          niet moet triggeren):
+
+          ```json
+          { "cases": [ { "prompt": "Summarize these receipts by category", "should_trigger": true, "expected": "Totals per category and over-limit items" } ] }
+          ```
+
+          Probeer de prompts in nieuwe chats en pas de description aan tot ze zich gedragen zoals je
+          wilt. Vraag je agent daarna om `evals/evals.json` in te sturen voor stap trigger-evals.
+        validation:
+          rules:
+            - { label: Minstens vier cases }
+            - { label: Er is een case die moet triggeren }
+            - { label: Er is een near-miss die niet moet triggeren }
+            - { label: De cases beschrijven het verwachte resultaat }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Wat zou jij een skill maken?
+        config:
+          prompt: Noem nog een taak voor {{theme.data.site.name}} die een goede skill met een script zou zijn. Wat doet het script, en wat beslist het model nog?
+        validation:
+          required_concepts:
+            - { label: het deterministische deel van het script, any_of: [script, calculate, parse, convert, validate, compute, bereken, omzet, valideer, controleer, tel] }
+      finish:
+        title: Skills die schalen
+        body: |
+          Je skill combineert het oordeel van het model met exact werk van code, en je kunt laten
+          zien wanneer hij triggert. Hierna maak je van {{theme.data.site.name}} een MCP server.

@@ -1,0 +1,233 @@
+# yaml-language-server: $schema=./schema/course.schema.json
+id: project-setup
+version: 1.0.0
+title: Start your project
+summary: Choose the website you will build throughout the track, set up an empty project and get your tools ready.
+description: |
+  This track is not a collection of loose exercises. You build **one website**, and every
+  course adds a part to it: a first page, a catalog API, tool calling, semantic search, a
+  vector database, answers from your own content, an MCP server and AI agents.
+
+  In this first course you choose what kind of website you build, pick the programming
+  language you want to use, and create an empty project with Git. Nothing is verified
+  automatically yet: in the next course you connect your AI agent to the platform.
+category: Getting started
+difficulty: beginner
+order: 1
+estimated_minutes: 20
+tags: [project, setup, git, nodejs]
+objectives:
+  - Explain how the courses in this track build on one project
+  - Choose a website theme and a programming language for the whole track
+  - Create an empty project folder under version control with Git
+glossary:
+  - term: Project
+    definition: The website you build throughout the whole track. Every course adds a part to it.
+  - term: Seed data
+    definition: The starting data of your website, such as the catalog of {{theme.items}}. The hidden checks in later courses expect exactly this data.
+  - term: Stack
+    definition: The programming language and tools you build with, for example JavaScript on Node.js.
+  - term: Node.js
+    definition: A runtime that lets you run JavaScript outside the browser, for example as a web server.
+  - term: npm
+    definition: The package manager of Node.js. `npm init` creates a `package.json`; `npm install` adds libraries.
+  - term: Git
+    definition: Version control. Every commit is a snapshot of your project you can return to.
+  - term: Repository
+    definition: A folder whose history Git tracks. `git init` turns a folder into a repository.
+  - term: Hidden check
+    definition: A test the platform sends to your own site. You see what is being checked, not the exact expected answers.
+extensions: [quiz]
+help: |
+  The learner sets up an empty project for the website theme they chose. Help with installing
+  Node.js (or their own stack), Git and a code editor, and with basic terminal commands. Keep it
+  calm and practical; many learners are new to this.
+
+sections:
+  - id: your-project
+    title: Your project
+    steps:
+      - id: how-it-works
+        type: explanation
+        title: One website, built course by course
+        estimated_minutes: 3
+        body: |
+          Most AI tutorials hand you a separate toy example for every topic. Here you build one
+          real website and keep improving it. That way every new concept lands on something you
+          already understand.
+
+          The track roughly goes like this:
+
+          1. **Foundations:** set up your project, connect your AI coding agent to the platform,
+             teach it your project's conventions with a skill, and build a first page with a
+             small catalog API.
+          2. **Make it smart:** let a model call your tools, add search that understands what
+             visitors *mean*, store embeddings in a vector database, read images and answer
+             questions from your own site content.
+          3. **Go further:** expose your site as an MCP server and build agents and workflows
+             on top of it.
+
+          The platform checks your work by sending requests to the site **you** run, from your
+          own browser. Your code never has to be public, and `localhost` works fine.
+
+      - id: big-picture
+        type: diagram
+        title: What you will have at the end
+        estimated_minutes: 3
+        body: |
+          This is where your project is heading. Select a box to read what it does; each part
+          gets its own course.
+        config:
+          nodes:
+            - { id: visitor, label: Visitor, kind: person, row: 0, col: 0, detail: "Someone using your website, for example searching for {{theme.search_example}}." }
+            - { id: site, label: Your website, kind: app, row: 0, col: 1, detail: "The pages and API you build, in the language you choose." }
+            - { id: model, label: AI models, kind: model, row: 0, col: 2, detail: "Language and embedding models your site calls, for example to understand a search query or answer a question." }
+            - { id: data, label: Catalog & site texts, kind: data, row: 1, col: 1, detail: "Your seed data: the {{theme.items}} and pages of your site. Later stored in a vector database too." }
+            - { id: agent, label: Your AI agent, kind: tool, row: 1, col: 0, detail: "The coding agent in your editor. It coaches you and reports your progress to the platform over MCP." }
+            - { id: platform, label: Learning platform, kind: app, row: 1, col: 2, detail: "Gives your agent your current step over MCP and runs hidden checks against your site." }
+          edges:
+            - { from: visitor, to: site, label: uses }
+            - { from: site, to: model, label: calls }
+            - { from: site, to: data, label: reads }
+            - { from: agent, to: platform, label: MCP }
+            - { from: platform, to: site, label: checks, dashed: true }
+          caption: You build everything in the middle column yourself, one course at a time.
+
+      - id: choose
+        type: project_setup
+        title: Choose your website
+        estimated_minutes: 4
+        body: |
+          Pick a website you would enjoy working on. Every theme comes with its own seed data:
+          a catalog of about a dozen products, services or listings, and a few pages of site
+          text such as opening hours and policies. The hidden checks in later courses are
+          written against that data.
+
+          You also choose the language you program in. **JavaScript with Node.js is
+          recommended**: it needs the least setup, and every course shows a JavaScript path.
+          The checks only look at what your site does, so other languages work too.
+
+      - id: your-choice
+        type: explanation
+        title: Meet {{theme.data.site.name}}
+        estimated_minutes: 3
+        body: |
+          You are building the **{{theme.site_kind}}** for **{{theme.data.site.name}}**, a
+          {{theme.business}} in {{theme.data.site.city}}.
+
+          Its seed data has two parts:
+
+          - **The catalog:** {{theme.data.items.0.name}}, {{theme.data.items.1.name}},
+            {{theme.data.items.2.name}} and more. Each of the {{theme.items}} has an `id`, a
+            `name`, a `category`, a `price`, a `description` and a few `tags`.
+          - **The site pages:** short texts such as "{{theme.data.pages.0.title}}" and
+            "{{theme.data.pages.1.title}}". Later you build an assistant that answers visitor
+            questions from exactly these texts.
+
+          You don't need to copy anything now. In the next course your AI agent fetches the
+          data straight from the platform with the `get_project` tool.
+
+  - id: setup
+    title: Set up your workspace
+    steps:
+      - id: tools
+        type: explanation
+        title: Install your tools
+        estimated_minutes: 5
+        body: |
+          You need four things. Skip whatever you already have.
+
+          1. **A code editor with an AI coding agent.** The courses use VS Code with GitHub
+             Copilot in agent mode, but any agent that supports MCP works.
+          2. **Node.js (LTS version)** from nodejs.org. Check it in a terminal with
+             `node --version` and `npm --version`. Did you choose another language? Install its
+             runtime instead, for example Python 3.12+.
+          3. **Git.** Check it with `git --version`. Tell Git who you are once:
+             `git config --global user.name "Your Name"` and
+             `git config --global user.email you@example.com`.
+          4. **An API key for a model provider.** Not needed until the tool-calling course,
+             but good to arrange early. Any provider with chat and embedding models works,
+             including a model you run locally.
+
+      - id: create-project
+        type: code_example
+        title: Create an empty project
+        estimated_minutes: 5
+        body: |
+          Open a terminal in the folder where you keep your code and create the project. The
+          folder name is up to you; this one matches your theme.
+
+          Then open the folder in your editor. This folder is your workspace for the rest of
+          the track.
+        config:
+          snippets:
+            - language: bash
+              filename: Terminal (JavaScript)
+              code: |
+                mkdir {{theme.id}}-site
+                cd {{theme.id}}-site
+                git init
+                npm init -y
+                echo "node_modules/" > .gitignore
+                echo ".env" >> .gitignore
+              caption: "`.env` will hold your API keys later; it must never be committed."
+            - language: markdown
+              filename: README.md
+              code: |
+                # {{theme.data.site.name}}
+
+                The {{theme.site_kind}} I build in the AI development track.
+            - language: bash
+              filename: Terminal
+              code: |
+                git add .
+                git commit -m "Start {{theme.data.site.name}}"
+              caption: Your first commit. Commit again after every course step that works.
+
+      - id: project-ready
+        type: manual_completion
+        title: Check your setup
+        estimated_minutes: 1
+        body: |
+          Mark this step as done when:
+
+          - the project folder exists and is open in your editor,
+          - it has a `README.md` and a `.gitignore` that ignores `.env`,
+          - `git log` shows your first commit.
+
+      - id: check
+        type: quiz
+        title: Check your understanding
+        estimated_minutes: 3
+        config:
+          pass_score: 0.66
+          questions:
+            - id: checks
+              prompt: How does the platform check the website you build?
+              explanation: Your browser sends the platform's test requests to your own site, so it also works on localhost and nothing has to be public.
+              options:
+                - { id: upload, text: You upload your code and the platform runs it }
+                - { id: browser, text: Your browser sends test requests to the site you run yourself, correct: true }
+                - { id: screenshot, text: You send screenshots of your site }
+            - id: env
+              prompt: Why does `.gitignore` contain `.env`?
+              explanation: API keys are secrets. Keeping `.env` out of Git prevents them from ending up in your history or on GitHub.
+              options:
+                - { id: secrets, text: So API keys in .env are never committed, correct: true }
+                - { id: speed, text: It makes Git faster }
+                - { id: required, text: Node.js refuses to start without it }
+            - id: seed
+              prompt: Why do all learners with the same theme get the same seed data?
+              explanation: The hidden checks are written against that data, for example "this search should find this item".
+              options:
+                - { id: checks, text: The hidden checks expect exactly that data, correct: true }
+                - { id: storage, text: To save storage on the platform }
+                - { id: random, text: It is random; every learner gets different data }
+
+      - id: finish
+        type: automatic_completion
+        title: Your project is ready
+        depends_on: [project-ready, check]
+        body: |
+          Your empty project is ready. In the next course you connect your AI agent to the
+          platform, and it fetches the seed data for {{theme.data.site.name}}.

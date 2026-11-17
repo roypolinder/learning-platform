@@ -248,7 +248,7 @@ async fn mcp_clients_sign_in_with_oauth() {
     assert_eq!(connection["auth_method"], "oauth");
     assert_eq!(connection["label"], "Visual Studio Code");
     assert_eq!(
-        listed["mcp_config"]["servers"]["learning-platform"]["type"],
+        listed["mcp_config"]["mcpServers"]["learning-platform"]["type"],
         "http"
     );
 

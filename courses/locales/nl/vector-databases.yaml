@@ -1,0 +1,185 @@
+title: Vector databases
+summary: Verhuis de zoekfunctie van je site naar een vector database, filter op metadata tijdens het zoeken en houd de index bij als je catalogus verandert.
+description: |
+  Alle vectoren in het geheugen houden werkt voor een stuk of twaalf {{theme.items}}, niet voor
+  een echte catalogus die elke dag groeit en verandert. Vector databases slaan vectoren op met
+  metadata, vinden snel de dichtstbijzijnde met een benaderende index, en laten je records live
+  toevoegen, wijzigen en verwijderen.
+
+  Je verhuist de zoekfunctie van {{theme.data.site.name}} naar een vector store naar keuze. Het
+  platform controleert dat filters *tijdens* het zoeken werken, en dat nieuwe, gewijzigde en
+  verwijderde {{theme.items}} meteen in de zoekresultaten te zien zijn.
+category: Retrieval
+objectives:
+  - Uitleggen hoe approximate nearest neighbour-indexen zoals HNSW nauwkeurigheid inruilen voor snelheid
+  - Items opslaan met vectoren en metadata, en filteren tijdens het zoeken
+  - De index consistent houden als items worden toegevoegd, gewijzigd of verwijderd
+  - Een distance metric kiezen en weten wanneer je opnieuw moet embedden
+prerequisites: [Semantic search]
+glossary:
+  Vector database: Een database die vectoren met metadata opslaat en snel de vectoren vindt die het dichtst bij een zoekvraag liggen.
+  ANN: Approximate nearest neighbour search. Heel snel, met als prijs dat je af en toe een echte dichtstbijzijnde buur mist.
+  HNSW: Hierarchical navigable small world. De meest gebruikte ANN-index, een gelaagde graaf die je richting de zoekvraag doorloopt.
+  Recall: Het deel van de echte dichtstbijzijnde buren dat een zoekopdracht daadwerkelijk vindt.
+  Metadata: Extra velden bij een vector, zoals categorie of prijs, waarop je kunt filteren.
+  Pre-filtering: Een filter toepassen tijdens het vector-zoeken, zodat je altijd de beste matches krijgt die door het filter komen.
+  Upsert: Een record toevoegen, of vervangen als er al een record met dezelfde id bestaat. Houdt de index gelijk met je data.
+  Distance metric: Hoe nabijheid gemeten wordt, bijvoorbeeld cosine of dot product. Gebruik de metric waarop je embedding model getraind is.
+  Quantization: Vectoren comprimeren (bijvoorbeeld naar 8 bits per getal) zodat er meer in het geheugen passen, met een klein verlies aan nauwkeurigheid.
+sections:
+  concepts:
+    title: Hoe vector databases werken
+    steps:
+      why:
+        title: Van een lijst in het geheugen naar een index
+        body: |
+          Een zoekvraag vergelijken met elke vector (*exact* of *brute-force* zoeken) gaat prima
+          voor een paar duizend items en is te traag voor miljoenen. Vector databases bouwen in
+          plaats daarvan een **approximate nearest neighbour (ANN)**-index:
+
+          - **HNSW** (hierarchical navigable small world-grafen) is het meest gebruikt: een
+            gelaagde graaf waarin je stap voor stap naar de zoekvraag toe loopt. Snel en
+            nauwkeurig, maar het kost veel geheugen.
+          - **IVF** deelt vectoren op in clusters en zoekt alleen in de dichtstbijzijnde clusters.
+          - **Quantization** comprimeert vectoren zodat er meer in het geheugen passen, ten koste
+            van een klein beetje nauwkeurigheid. Een bekende truc: haal met de gecomprimeerde
+            vectoren extra kandidaten op en bereken de beste opnieuw met de volledige vectoren.
+
+          *Approximate* betekent een recall onder de 100%: af en toe wordt een echte buur gemist.
+          Met indexparameters (bij HNSW: `M`, `ef_construction`, `ef_search`) stel je die afweging
+          af.
+
+          Een record voor een van je {{theme.items}} kan er zo uitzien:
+
+          | Veld | Voorbeeld |
+          | --- | --- |
+          | id | `{{theme.probes.catalog.item_id}}` |
+          | vector | `[0.013, -0.27, …]` |
+          | metadata | `{ "category": "…", "price": … }` |
+          | text | naam + beschrijving, zodat je het kunt tonen |
+
+          Je opties lopen van een vector-extensie in een database die je al gebruikt, via
+          gespecialiseerde vector databases, tot libraries die in je eigen proces draaien. De
+          concepten in deze cursus gelden voor allemaal.
+      write-and-read:
+        title: Het schrijfpad en het leespad
+        config:
+          nodes:
+            - { id: change, label: "Een {{theme.item}} wordt toegevoegd of gewijzigd", detail: "Via je API, bijvoorbeeld `POST /api/items`." }
+            - { id: embed-write, detail: "Embed de nieuwe tekst met hetzelfde model als al het andere." }
+            - { id: db, detail: "**Upsert** op id: een gewijzigd item vervangt zijn oude vector, dus verouderde resultaten kunnen niet opduiken." }
+            - { id: query, label: Zoeken met een filter, detail: "Bijvoorbeeld: *{{theme.probes.vector.query}}* in categorie `{{theme.probes.vector.category}}`." }
+            - { id: embed-read, detail: "De vector van de zoekvraag." }
+            - { id: ann, label: ANN-zoeken + filter, detail: "Filter **tijdens** het zoeken, zodat je de beste matches krijgt die door het filter komen." }
+          edges:
+            - {}
+            - {}
+            - {}
+            - {}
+            - { label: dichtstbij }
+      production:
+        title: Wat telt in productie
+        body: |
+          - **Distance metric.** Gebruik de metric waarop je embedding model getraind is, meestal
+            cosine (of dot product op genormaliseerde vectoren). Metrics door elkaar gebruiken
+            maakt je resultaten ongemerkt slechter.
+          - **Filteren.** Echte zoekvragen hebben voorwaarden: één categorie, een maximumprijs,
+            alleen records die iemand mag zien. Filteren *tijdens* het ANN-zoeken voorkomt de
+            valkuil van post-filtering, waarbij de top 5 helemaal wordt weggefilterd en er niets
+            overblijft.
+          - **Bijhouden.** Gebruik vaste id's en **upserts**, zodat een wijziging de oude vector
+            vervangt, en verwijder vectoren als de bron verdwijnt. Verouderde vectoren zijn de
+            meest voorkomende oorzaak van foute antwoorden in retrieval-systemen.
+          - **Modelversies.** Leg vast welk embedding model elke vector maakte. Wissel je van
+            model, dan embed je alles opnieuw in een nieuwe collectie en schakel je over als die
+            klaar is.
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: ann
+              prompt: Wat levert een ANN-index zoals HNSW in om sneller te zijn?
+              explanation: Benaderend zoeken mist af en toe een echte dichtstbijzijnde buur (recall onder de 100%).
+              options:
+                - { id: recall, text: "Een beetje recall: soms mist hij een echte dichtstbijzijnde buur" }
+                - { id: metadata, text: "De mogelijkheid om metadata op te slaan" }
+                - { id: deletes, text: "Ondersteuning voor verwijderen" }
+            - id: postfilter
+              prompt: Je haalt de top 5 op en haalt daarna de resultaten buiten de gekozen categorie weg. Wat kan er misgaan?
+              explanation: Met post-filtering hou je soms te weinig of zelfs nul resultaten over. Filter daarom tijdens het zoeken.
+              options:
+                - { id: empty, text: "Je houdt weinig of geen resultaten over" }
+                - { id: slow, text: "Niets, dit is de aanbevolen aanpak" }
+                - { id: leak, text: "De vectoren worden ongeldig" }
+            - id: update
+              prompt: De beschrijving van een {{theme.item}} verandert. Hoe houd je de zoekfunctie correct?
+              explanation: Een upsert op een vaste id vervangt de vector en metadata, zodat de oude versie niet meer gevonden wordt.
+              options:
+                - { id: insert, text: "De nieuwe versie toevoegen met een nieuwe id" }
+                - { id: upsert, text: "Opnieuw embedden en upserten onder dezelfde id" }
+                - { id: nothing, text: "Niets; embeddings passen zich vanzelf aan" }
+            - id: quantization
+              prompt: Hoe houd je meestal de nauwkeurigheid op peil als vectoren sterk gecomprimeerd zijn?
+              explanation: Zoek met de gecomprimeerde vectoren en bereken de beste kandidaten opnieuw met de volledige vectoren.
+              options:
+                - { id: rescore, text: "Extra kandidaten ophalen en die opnieuw scoren met de volledige vectoren" }
+                - { id: bigger, text: "Meer dimensies gebruiken" }
+                - { id: none, text: "Dat kan niet; accepteer het verlies" }
+  build:
+    title: Verhuis de zoekfunctie naar een vector database
+    steps:
+      previous-course:
+        title: Je semantic search werkt
+      contract:
+        title: De nieuwe endpoints
+        body: |
+          Kies een vector store en laad elk item uit `data/items.json` erin, met de categorie en
+          prijs als metadata. Pas daarna deze endpoints aan of voeg ze toe:
+
+          - `GET /api/search?q=…&k=…&category=…` zoekt nu in de vector database. `k` is het
+            maximale aantal resultaten (standaard 5), `category` een optioneel filter dat
+            **tijdens** het zoeken wordt toegepast. Elk resultaat heeft `id`, `name`, `category` en
+            `score`.
+          - `POST /api/items` met een item in hetzelfde formaat als `data/items.json` embedt het en
+            doet een **upsert**: een nieuwe id wordt toegevoegd, een bestaande vervangen.
+          - `DELETE /api/items/<id>` haalt het item uit de index (`200` of `204`).
+
+          Houd de drempel uit de vorige cursus aan voor zoekvragen zonder filter.
+      search-api:
+        title: Voer de vector database-checks uit
+        body: |
+          Het platform voert verborgen checks uit, op volgorde:
+
+          1. Een zoekopdracht met een categoriefilter, en een zoekopdracht die `k` respecteert.
+          2. Een gloednieuwe {{theme.item}} met een willekeurige id toevoegen, die op betekenis
+             vinden, de beschrijving wijzigen en hem op de nieuwe betekenis vinden.
+          3. Hem verwijderen en controleren dat hij weg is.
+
+          Alles behalve de betekenischecks moet slagen, en minstens twee derde daarvan.
+        validation:
+          cases:
+            - { id: filter, label: Een categoriefilter wordt tijdens het zoeken toegepast }
+            - { id: filtered-meaning, label: "De gefilterde zoekopdracht zet de juiste {{theme.item}} bovenaan" }
+            - { id: k, label: Respecteert k en sorteert op score }
+            - { id: insert, label: "Voegt een nieuwe {{theme.item}} toe" }
+            - { id: find-new, label: "Vindt de nieuwe {{theme.item}} meteen op betekenis" }
+            - { id: update, label: "Vervangt de {{theme.item}} als die verandert" }
+            - { id: find-updated, label: Vindt hem op zijn nieuwe beschrijving }
+            - { id: single-record, label: Houdt na een wijziging één record per id }
+            - { id: delete, label: "Verwijdert de {{theme.item}}" }
+            - { id: gone, label: Verwijderde items verschijnen niet meer }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Plan een modelupgrade
+        config:
+          prompt: Er komt een beter embedding model uit. Beschrijf hoe je de zoekfunctie van {{theme.data.site.name}} overzet zonder downtime en zonder vectoren te mengen.
+        validation:
+          required_concepts:
+            - { label: opnieuw embedden in een nieuwe index of collectie, any_of: [re-embed, reembed, new collection, new index, reindex, re-index, backfill, opnieuw embed, nieuwe collectie, nieuwe index, herindex] }
+      finish:
+        title: Je zoekfunctie schaalt
+        body: |
+          De zoekfunctie van {{theme.data.site.name}} draait nu op een vector database die bij
+          blijft. Hierna leert je site afbeeldingen lezen.

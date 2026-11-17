@@ -1,0 +1,123 @@
+title: Leer je agent iets met skills
+summary: Schrijf een skill die je coding agent de afspraken van je project leert, zodat hij je in elke cursus op dezelfde manier helpt.
+description: |
+  Skills zijn mappen met een bestand `SKILL.md` die een agent leren hoe hij een specifieke taak
+  uitvoert zoals *jij* dat wilt. Je leert hoe agents skills vinden en laden, en schrijft een
+  skill met de afspraken van {{theme.data.site.name}}: waar de data staat, hoe het project is
+  opgebouwd en hoe je agent je moet coachen. Elke volgende cursus heeft er profijt van.
+category: AI agents
+objectives:
+  - Beschrijven hoe agents skills vinden en laden
+  - Een precieze skill-description schrijven die op het juiste moment triggert
+  - De instructies van een skill opbouwen als concrete, controleerbare stappen
+prerequisites: [Koppel je AI agent via MCP]
+glossary:
+  Skill: Een map met een bestand `SKILL.md` (en eventueel scripts of referentiebestanden) die een agent een specifieke taak leert.
+  SKILL.md: Het skill-bestand. YAML-frontmatter met `name` en `description`, gevolgd door instructies in Markdown.
+  Frontmatter: Het blok tussen twee regels `---` bovenaan een Markdown-bestand, met metadata in YAML.
+  Progressive disclosure: De agent ziet eerst alleen de naam en description van elke skill, en laadt de volledige instructies pas als een vraag erbij past.
+  Context window: Alles wat een model in één keer kan zien. Kleinere, relevante context geeft betere antwoorden.
+shared_sections:
+  agent-connection:
+    steps:
+      reconnect:
+        title: Controleer dat je agent gekoppeld is
+        body: |
+          In deze cursus stuurt je agent bestanden in. Zorg dat de server `learning-platform` uit
+          de MCP-cursus draait (kies **Authenticate** als VS Code zegt dat er authenticatie nodig
+          is) en vraag je agent: **"Wat is mijn huidige stap op het learning platform?"**
+sections:
+  learn:
+    title: Wat een goede skill is
+    steps:
+      what-are-skills:
+        title: Skills in één minuut
+        body: |
+          Een skill is een map met een bestand `SKILL.md` en eventueel scripts of
+          referentiebestanden. In VS Code staan ze in `.github/skills/<skill-naam>/`.
+
+          Agents lezen niet alle skills vooraf. Bij het opstarten zien ze alleen de **name en
+          description** van elke skill uit de YAML-frontmatter. Past een vraag bij een
+          description, dan laadt de agent de volledige instructies. Deze *progressive disclosure*
+          houdt het context window klein en geeft de agent toch toegang tot veel kennis.
+
+          Wat dat betekent als je een skill schrijft:
+
+          - De **description** bepaalt of je skill ooit gebruikt wordt. Zeg wat hij doet *én*
+            wanneer je hem gebruikt.
+          - De **body** leest als een draaiboek: concrete stappen, bestandspaden, commando's en hoe
+            je het resultaat controleert — geen essay.
+      loading-order:
+        title: Hoe een agent een skill gebruikt
+        config:
+          prompt: Zet de stappen in de volgorde waarin een agent met een skill werkt.
+          chips:
+            - { id: index, label: "Bij het opstarten leest hij alleen de name en description van elke skill" }
+            - { id: request, label: "Je vraagt iets, bijvoorbeeld een nieuwe pagina voor je site" }
+            - { id: match, label: "De vraag past bij de description van een skill" }
+            - { id: load, label: "Hij laadt de volledige SKILL.md in zijn context" }
+            - { id: follow, label: "Hij volgt de stappen en controleert het resultaat" }
+      anatomy:
+        title: Zo is SKILL.md opgebouwd
+        config:
+          snippets:
+            - caption: Frontmatter om gevonden te worden, body om uit te voeren.
+      good-description:
+        title: Kies de beste description
+        config:
+          prompt: Welke description geeft een agent de beste kans om je skill met afspraken op het juiste moment te laden?
+          explanation: Een goede description noemt concreet wat de skill kan en wanneer hij van toepassing is.
+          options:
+            - { id: vague, text: "Helpt met de website.", explanation: "Te vaag — de agent kan niet zien wanneer dit van toepassing is." }
+            - { id: precise, text: "Afspraken voor het project {{theme.data.site.name}}: mappenstructuur, de databestanden en hoe je me coacht. Gebruik bij het toevoegen of wijzigen van functies van de site." }
+            - { id: long, text: "Een complete, toonaangevende oplossing voor al je webdevelopment.", explanation: "Marketingtaal zonder triggers of afbakening." }
+  build:
+    title: Schrijf je skill met afspraken
+    steps:
+      previous-course:
+        title: Je agent is gekoppeld
+      write-skill:
+        title: Schrijf de skill met je agent
+        body: |
+          Schrijf een skill met de naam `site-conventions` in
+          `.github/skills/site-conventions/SKILL.md`. Vraag je agent om hulp, maar bepaal de
+          inhoud zelf. Een goede skill met afspraken voor {{theme.data.site.name}} bevat:
+
+          - **When to use:** altijd als je een functie van de site toevoegt of wijzigt.
+          - **Projectstructuur:** de seed data staat in `data/items.json` en `data/pages.json` en
+            wordt nooit met de hand aangepast; waar code en pagina's komen zodra je die hebt.
+          - **Hoe hij je helpt:** je bent aan het leren, dus de agent legt uit en geeft hints in
+            plaats van hele functies te schrijven, en houdt vaktermen Engels.
+          - **Hoe je werk controleert:** bijvoorbeeld "start de server en roep het endpoint aan
+            met curl".
+
+          De koppen `## When to use` en `## Steps` moeten precies zo heten; de rest mag in het
+          Nederlands. Ben je tevreden, vraag dan: **"Stuur mijn skill naar het learning platform
+          voor stap write-skill."**
+
+          Het platform controleert dat de frontmatter een `name` en `description` heeft, dat de
+          secties `## When to use` en `## Steps` er zijn en dat de skill je databestanden noemt.
+      try-it:
+        title: Probeer het uit
+        body: |
+          Start een nieuwe chat en vraag je agent: **"Waar staat de catalogus van mijn site, en
+          hoe moet je me helpen als ik een functie bouw?"**
+
+          Werkt de skill, dan volgt het antwoord je afspraken. Zo niet, dan past de description
+          waarschijnlijk niet goed genoeg bij de vraag: maak hem scherper en probeer opnieuw.
+          Commit de skill als je klaar bent.
+  reflect:
+    title: Terugblikken
+    steps:
+      trigger-explanation:
+        title: Wanneer laadt je skill?
+        config:
+          prompt: Beschrijf een vraag waarbij je agent de skill site-conventions moet laden, en een vraag waarbij dat niet moet.
+        validation:
+          required_concepts:
+            - { label: de description of trigger, any_of: [description, trigger, when, wanneer, beschrijving] }
+      finish:
+        title: Je agent kent je project
+        body: |
+          Je agent weet nu hoe {{theme.data.site.name}} in elkaar zit. In de volgende cursus bouw
+          je de eerste pagina en een catalogus-API.

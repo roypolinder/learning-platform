@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum::extract::FromRef;
-use lp_course_engine::CourseEngine;
+use lp_course_engine::{CourseEngine, ThemeCatalog};
 use sqlx::PgPool;
 
 use crate::config::AppConfig;
@@ -16,6 +16,7 @@ pub struct AppState {
     pub db: PgPool,
     pub engine: Arc<CourseEngine>,
     pub catalog: Arc<CourseCatalog>,
+    pub themes: Arc<ThemeCatalog>,
     pub hub: SessionHub,
     pub auth_limiter: RateLimiter,
     pub mcp_limiter: RateLimiter,
@@ -27,12 +28,14 @@ impl AppState {
         db: PgPool,
         engine: Arc<CourseEngine>,
         catalog: CourseCatalog,
+        themes: ThemeCatalog,
     ) -> Self {
         Self {
             config: Arc::new(config),
             db,
             engine,
             catalog: Arc::new(catalog),
+            themes: Arc::new(themes),
             hub: SessionHub::new(1024),
             auth_limiter: RateLimiter::new(20, Duration::from_secs(60)),
             mcp_limiter: RateLimiter::new(240, Duration::from_secs(60)),

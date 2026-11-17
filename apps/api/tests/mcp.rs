@@ -45,29 +45,70 @@ async fn token(user: &TestUser) -> String {
     created["token"].as_str().unwrap().to_owned()
 }
 
+/// Chooses a project and finishes the first course of the track, which unlocks the next.
+async fn finish_project_setup(user: &TestUser) {
+    user.post_ok(
+        "/api/v1/project",
+        json!({ "theme_id": "bike-rental", "stack": "javascript" }),
+    )
+    .await;
+    let started = user
+        .post_ok("/api/v1/courses/project-setup/sessions", json!({}))
+        .await;
+    let base = format!(
+        "/api/v1/sessions/{}",
+        started["session"]["id"].as_str().unwrap()
+    );
+    assert_eq!(step_status(&started["progress"], "choose"), "locked");
+    for step in ["how-it-works", "big-picture"] {
+        user.post_ok(&format!("{base}/steps/{step}/complete"), json!({}))
+            .await;
+    }
+    // The project already exists, so the choice step resolves itself.
+    let refreshed = user.post_ok(&format!("{base}/refresh"), json!({})).await;
+    assert_eq!(step_status(&refreshed, "choose"), "completed");
+    for step in ["your-choice", "tools", "create-project", "project-ready"] {
+        user.post_ok(&format!("{base}/steps/{step}/complete"), json!({}))
+            .await;
+    }
+    let quiz = user
+        .post_ok(
+            &format!("{base}/steps/check/submissions"),
+            json!({ "payload": { "answers": { "checks": ["browser"], "env": ["secrets"], "seed": ["checks"] } } }),
+        )
+        .await;
+    assert_eq!(quiz["progress"]["status"], "completed", "{quiz}");
+}
+
 #[tokio::test]
 async fn agent_connects_completes_steps_and_stays_isolated() {
     let app = TestApp::spawn().await;
     let ada = app.user("ada").await;
+    finish_project_setup(&ada).await;
     let started = ada
         .post_ok("/api/v1/courses/mcp-first-connection/sessions", json!({}))
         .await;
     let session_id = started["session"]["id"].as_str().unwrap().to_owned();
     let base = format!("/api/v1/sessions/{session_id}");
-    for step in ["what-is-mcp", "primitives"] {
+    for step in ["what-is-mcp", "roles", "primitives"] {
         ada.post_ok(&format!("{base}/steps/{step}/complete"), json!({}))
             .await;
     }
     ada.post_ok(
+        &format!("{base}/steps/place-roles/submissions"),
+        json!({ "payload": { "slots": { "host": "host", "client": "client", "server": "server" } } }),
+    )
+    .await;
+    ada.post_ok(
         &format!("{base}/steps/check-basics/submissions"),
-        json!({ "payload": { "answers": { "transport": ["http"], "control": ["tools"], "roles": ["host"], "authorization": ["challenge"] } } }),
+        json!({ "payload": { "answers": { "transport": ["http"], "control": ["tools"], "authorization": ["challenge"] } } }),
     )
     .await;
     ada.post_ok(&format!("{base}/steps/config-example/complete"), json!({}))
         .await;
     ada.post_ok(
         &format!("{base}/steps/config-blanks/submissions"),
-        json!({ "payload": { "blanks": { "root": "servers", "transport": "http", "path": "mcp" } } }),
+        json!({ "payload": { "blanks": { "root": "mcpServers", "transport": "http", "path": "mcp" } } }),
     )
     .await;
 
@@ -80,9 +121,15 @@ async fn agent_connects_completes_steps_and_stays_isolated() {
         "get_current_step",
         "report_task_result",
         "get_session_status",
+        "get_project",
     ] {
         assert!(names.contains(&expected.to_owned()), "{names:?}");
     }
+
+    let (is_error, project) = call(&client, "get_project", json!({})).await;
+    assert!(!is_error, "{project}");
+    assert_eq!(project["project"]["theme"]["id"], "bike-rental");
+    assert_eq!(project["seed_data"]["items"].as_array().unwrap().len(), 12);
 
     // A different tool does not satisfy the connection step...
     let (_, status) = call(&client, "get_session_status", json!({})).await;
@@ -90,30 +137,62 @@ async fn agent_connects_completes_steps_and_stays_isolated() {
     // ...calling get_current_step does, and the response already shows the next step.
     let (is_error, current) = call(&client, "get_current_step", json!({})).await;
     assert!(!is_error, "{current}");
-    assert_eq!(current["step"]["id"], "verify-config");
+    assert_eq!(current["step"]["id"], "fetch-project");
     assert!(current["step"]["submission_schema"].is_object());
     let progress = ada.json(&format!("{base}/progress")).await;
     assert_eq!(step_status(&progress, "connect-agent"), "completed");
 
-    let hardcoded = json!({ "servers": { "lp": { "type": "http", "url": "http://localhost:8080/mcp", "headers": { "Authorization": "Bearer lp_mcp_secret" } } } });
+    // The file checks are filled in for Ada's theme.
+    let items = project["seed_data"]["items"].to_string();
+    let pages = project["seed_data"]["pages"].to_string();
+    let (_, missing_readme) = call(
+        &client,
+        "report_task_result",
+        json!({
+            "step_id": "fetch-project",
+            "evidence": { "files": [
+                { "path": "data/items.json", "content": items },
+                { "path": "data/pages.json", "content": pages },
+                { "path": "README.md", "content": "# My site\n\nSomething I am building for a course." }
+            ] }
+        }),
+    )
+    .await;
+    assert_eq!(missing_readme["outcome"]["status"], "failed");
+    let (_, fetched) = call(
+        &client,
+        "report_task_result",
+        json!({
+            "step_id": "fetch-project",
+            "evidence": { "files": [
+                { "path": "data/items.json", "content": items },
+                { "path": "data/pages.json", "content": pages },
+                { "path": "README.md", "content": "# Velora Bikes\n\nThe bike rental website I build in the track." }
+            ] }
+        }),
+    )
+    .await;
+    assert_eq!(fetched["outcome"]["status"], "passed", "{fetched}");
+
+    let hardcoded = json!({ "mcpServers": { "lp": { "type": "http", "url": "http://localhost:8080/mcp", "headers": { "Authorization": "Bearer lp_mcp_secret" } } } });
     let (_, rejected) = call(
         &client,
         "report_task_result",
         json!({
             "step_id": "verify-config",
-            "evidence": { "files": [ { "path": ".vscode/mcp.json", "content": hardcoded.to_string() } ] }
+            "evidence": { "files": [ { "path": ".mcp.json", "content": hardcoded.to_string() } ] }
         }),
     )
     .await;
     assert_eq!(rejected["outcome"]["status"], "failed");
 
-    let safe = json!({ "servers": { "lp": { "type": "http", "url": "http://localhost:8080/mcp", "tools": ["*"] } } });
+    let safe = json!({ "mcpServers": { "lp": { "type": "http", "url": "http://localhost:8080/mcp", "tools": ["*"] } } });
     let (_, accepted) = call(
         &client,
         "report_task_result",
         json!({
             "step_id": "verify-config",
-            "evidence": { "files": [ { "path": ".vscode/mcp.json", "content": safe.to_string() } ] }
+            "evidence": { "files": [ { "path": ".mcp.json", "content": safe.to_string() } ] }
         }),
     )
     .await;

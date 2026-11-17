@@ -47,12 +47,18 @@ pub async fn register(state: &AppState, request: RegisterRequest) -> ApiResult<I
         .await
         .map_err(ApiError::internal)?
         .map_err(ApiError::internal)?;
-    let user = users::insert(&state.db, &email, &display_name, &password_hash)
-        .await?
-        .ok_or_else(|| ApiError::Conflict {
-            code: "email_taken",
-            message: "An account with this email already exists.".into(),
-        })?;
+    let user = users::insert(
+        &state.db,
+        &email,
+        &display_name,
+        &password_hash,
+        request.locale,
+    )
+    .await?
+    .ok_or_else(|| ApiError::Conflict {
+        code: "email_taken",
+        message: "An account with this email already exists.".into(),
+    })?;
     issue_session(state, user).await
 }
 

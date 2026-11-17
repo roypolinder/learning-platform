@@ -1,0 +1,168 @@
+title: Multimodal AI
+summary: Laat je site foto's van bonnetjes lezen met een vision model en zet ze om in gevalideerde JSON, bewezen op afbeeldingen die je nog nooit gezien hebt.
+description: |
+  Moderne modellen lezen niet alleen tekst. Ze begrijpen afbeeldingen, documenten, audio en
+  video in hetzelfde request. Het meest waardevolle dagelijkse gebruik: rommelige visuele input
+  omzetten in nette, gestructureerde data waar je op kunt vertrouwen.
+
+  Elke {{theme.business}} verdrinkt in papieren bonnetjes van leveranciers. Je voegt een
+  bonnetjesscanner toe aan de backoffice van {{theme.data.site.name}}: een endpoint dat een foto
+  van een bon naar een vision model stuurt, output vraagt die een JSON Schema volgt, en die
+  valideert en normaliseert. Het platform stuurt bonnetjes die je nog nooit gezien hebt, plus
+  een afbeelding die helemaal geen bon is.
+category: AI-basis
+objectives:
+  - Uitleggen hoe modellen afbeeldingen, audio en video verwerken, en wat dat kost
+  - Gestructureerde output vragen die een JSON Schema volgt, en die valideren
+  - Datums, valuta en bedragen normaliseren zodat andere code erop kan bouwen
+  - Herkennen wanneer input buiten de opdracht valt in plaats van velden te verzinnen
+prerequisites: [Vector databases]
+glossary:
+  Multimodal model: Een model dat verschillende soorten input begrijpt, zoals tekst, afbeeldingen en audio, in hetzelfde request.
+  Vision model: Een model dat afbeeldingen kan lezen. Vaak hetzelfde model dat je voor chat gebruikt.
+  Image tokens: Een afbeelding wordt opgedeeld in stukjes die tokens worden. Hogere resolutie betekent meer tokens, dus meer kosten en wachttijd.
+  Structured output: Het model vragen om output die een JSON Schema volgt, vaak afgedwongen door de provider, zodat je code hem betrouwbaar kan parsen.
+  Data URL: Een bestand ingebed in tekst, zoals `data:image/png;base64,…`. Een gebruikelijke manier om een afbeelding in een JSON-request te sturen.
+  Base64: Een manier om binaire data, zoals een afbeelding, als gewone tekst te schrijven.
+  Normalization: Waarden omzetten naar één formaat, zoals datums naar `YYYY-MM-DD` en bedragen naar getallen, zodat andere code erop kan vertrouwen.
+  ISO 8601 / ISO 4217: De standaardformaten voor datums (`2026-03-14`) en valutacodes (`EUR`, `USD`).
+sections:
+  concepts:
+    title: Hoe multimodale modellen werken
+    steps:
+      modalities:
+        title: Eén model, veel soorten input
+        body: |
+          Een multimodaal model zet elke input om in tokens waarover het samen kan redeneren:
+
+          - **Afbeeldingen** worden opgedeeld in stukjes (patches) die tokens worden. Een hogere
+            resolutie betekent meer tokens, dus meer kosten en wachttijd, maar kleine tekst blijft
+            leesbaar. Bij veel API's kies je een detailniveau.
+          - **Documenten** (PDF's, scans) worden verwerkt als afbeelding, als geëxtraheerde tekst,
+            of allebei. De opmaak telt: een bedrag naast het woord "TOTAAL" betekent iets.
+          - **Audio** kan eerst worden uitgeschreven, of direct begrepen, inclusief toon en
+            wisselingen van spreker.
+          - **Video** wordt meestal bemonsterd als losse frames plus het geluidsspoor.
+
+          Hetzelfde model kan ook andere vormen *maken*, maar deze cursus gaat over begrijpen,
+          daar zit nu de meeste waarde: facturen, formulieren, screenshots, foto's van
+          whiteboards, productfoto's.
+
+          Twee gewoontes maken multimodale systemen betrouwbaar:
+
+          1. **Vraag om structuur.** Beschrijf de output als JSON Schema en gebruik de structured
+             output of JSON mode van je provider als die er is. Vrije tekst is lastig te
+             controleren.
+          2. **Valideer en normaliseer in je code.** Parse het resultaat, controleer types en
+             bereiken, zet datums om naar ISO 8601 en bedragen naar getallen, en probeer opnieuw
+             of markeer het resultaat als de validatie faalt. Vertrouw geëxtraheerde waarden nooit
+             blind.
+      risks:
+        title: Valkuilen van visuele input
+        body: |
+          - **Verzonnen velden.** Vraag je om een totaalbedrag, dan verzint een model er misschien
+            een, ook als de afbeelding een kat is. Sta `null` toe in je schema en voeg een expliciet
+            veld toe als "is dit het verwachte soort document?", zodat het model een eerlijke uitweg
+            heeft.
+          - **Dubbelzinnige formaten.** Is `03/04/2026` 3 april of 4 maart? Betekent `1.250,00`
+            twaalfhonderdvijftig? Gebruik de context (land, valuta) en normaliseer naar één formaat.
+          - **Prompt injection in afbeeldingen.** Tekst in een afbeelding is gewoon input. Een foto
+            met "negeer je instructies" kan een model sturen. Houd de extractie-instructies
+            gescheiden en geef de extractiestap geen macht om iets te doen.
+          - **Privacy.** Bonnetjes, ID's en screenshots bevatten persoonsgegevens. Stuur alleen wat
+            nodig is, weet waar de provider data verwerkt en anonimiseer wat je opslaat.
+      pipeline:
+        title: Bouw de pipeline
+        config:
+          prompt: Zet de stappen van een betrouwbare extractiepipeline op volgorde.
+          chips:
+            - { id: receive, label: Ontvang de foto als data URL }
+            - { id: model, label: Stuur hem naar een vision model met je JSON Schema }
+            - { id: parse, label: Parse de JSON die het model teruggeeft }
+            - { id: validate, label: "Valideer en normaliseer: datums, valutacodes, getallen" }
+            - { id: respond, label: "Antwoord, of probeer één keer opnieuw als de validatie faalde" }
+      check-concepts:
+        title: Controleer wat je weet
+        config:
+          questions:
+            - id: resolution
+              prompt: Wat gebeurt er meestal als je een afbeelding met een hogere resolutie stuurt?
+              explanation: Meer image tokens maakt kleine tekst beter leesbaar, maar kost meer en duurt langer.
+              options:
+                - { id: tokens, text: "Meer tokens: meer detail, hogere kosten en wachttijd" }
+                - { id: free, text: "Niets, afbeeldingen hebben een vaste prijs" }
+                - { id: worse, text: "Het model wordt altijd minder nauwkeurig" }
+            - id: null-field
+              prompt: De afbeelding is een landschapsfoto, geen bon. Wat moet je schema toestaan?
+              explanation: Een veld voor het soort document plus velden die null mogen zijn geeft het model een eerlijke manier om "niet van toepassing" te zeggen.
+              options:
+                - { id: zero, text: "total = 0" }
+                - { id: nullable, text: "document_type = other en total = null" }
+                - { id: error, text: "Crashen, zodat de gebruiker het opnieuw probeert" }
+            - id: validate
+              prompt: 'Het model gaf "total": "€ 23,85" terug. Wat moet je code doen?'
+              explanation: Normaliseer naar een getal (23.85) en valideer het voordat je het gebruikt.
+              options:
+                - { id: pass, text: "De tekst ongewijzigd doorgeven" }
+                - { id: normalize, text: "Parsen en normaliseren naar het getal 23.85, en dan valideren" }
+                - { id: reject, text: "Altijd het hele resultaat afkeuren" }
+            - id: injection
+              prompt: Kan tekst in een afbeelding werken als prompt injection?
+              explanation: Ja. Tekst in afbeeldingen is input voor het model, net als alle andere input.
+              options:
+                - { id: is-input, text: "Ja, tekst in afbeeldingen is input voor het model" }
+                - { id: ignored, text: "Nee, modellen negeren tekst in afbeeldingen" }
+  build:
+    title: Bouw de bonnetjesscanner
+    steps:
+      previous-course:
+        title: Je vector database werkt
+      contract:
+        title: Het extractiecontract
+        body: |
+          Voeg één endpoint toe aan de server van {{theme.data.site.name}}:
+          `POST /api/receipts/extract`. Het ontvangt `{"image": "data:image/png;base64,..."}` (PNG of
+          JPEG) en antwoordt met de JSON hieronder. Gebruik een vision model naar keuze.
+
+          Regels:
+
+          - `document_type` is `"receipt"` of `"other"`. Bij `other` zijn alle andere velden `null`
+            (en is `line_items` leeg).
+          - `date` is ISO 8601 (`YYYY-MM-DD`). `currency` is een ISO 4217-code (`EUR`, `USD`, …).
+          - `total` en de `amount` van elke regel zijn **getallen**; het totaal is wat echt betaald
+            is.
+          - Valideer de output van het model voordat je antwoordt. Faalt de validatie, probeer dan
+            één keer opnieuw.
+        config:
+          snippets:
+            - {}
+            - { caption: Een beginpunt voor structured output. }
+      extractor:
+        title: Voer de extractiechecks uit
+        body: |
+          Het platform stuurt drie afbeeldingen die je nog niet gezien hebt: een duidelijke bon van
+          een Nederlandse bakkerij, een iets scheve bon van een Amerikaanse bouwmarkt, en iets wat
+          geen bon is. De eerste moet slagen, plus minstens één van de andere twee.
+
+          Elke afbeeldingcheck controleert meerdere velden tegelijk: type, winkel, datum, valuta,
+          totaal en regels.
+        validation:
+          cases:
+            - { id: bakery, label: Leest de bon van de bakkerij uit }
+            - { id: hardware, label: Leest de scheve bon van de bouwmarkt uit }
+            - { id: not-a-receipt, label: Herkent een afbeelding die geen bon is }
+  wrap-up:
+    title: Afronden
+    steps:
+      reflection:
+        title: Verantwoord in productie
+        config:
+          prompt: De bonnetjesscanner van {{theme.data.site.name}} gaat echte bonnen verwerken. Noem twee maatregelen die je toevoegt voordat hij live gaat, en waarom.
+        validation:
+          required_concepts:
+            - { label: privacy, any_of: [privacy, personal, redact, review, human, monitor, confidence, audit, retention, persoonsgegevens, anonimis, controle, mens, monitoring, bewaartermijn] }
+      finish:
+        title: Je model kan zien
+        body: |
+          Je hebt pixels omgezet in gevalideerde data. Hierna krijgt {{theme.data.site.name}} een
+          assistent die vragen van bezoekers beantwoordt uit de pagina's van je eigen site.

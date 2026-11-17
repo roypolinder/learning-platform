@@ -1,20 +1,21 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.svelte.ts';
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import type { ValidationOutcome } from '#lib/types/api.ts';
 
 	let { outcome, title }: { outcome: ValidationOutcome; title?: string } = $props();
 
 	const tones = {
-		passed: { box: 'border-transparent bg-success-soft', text: 'text-success', label: 'Passed' },
-		failed: { box: 'border-transparent bg-warning-soft', text: 'text-warning', label: 'Not yet' },
-		pending: { box: 'border-line bg-surface-muted', text: 'text-fg-muted', label: 'Pending' }
+		passed: { box: 'border-transparent bg-success-soft', text: 'text-success', label: 'outcome.passed' },
+		failed: { box: 'border-transparent bg-warning-soft', text: 'text-warning', label: 'outcome.failed' },
+		pending: { box: 'border-line bg-surface-muted', text: 'text-fg-muted', label: 'outcome.pending' }
 	} as const;
 	let tone = $derived(tones[outcome.status]);
 </script>
 
 <section class="rounded-lg border {tone.box} px-4 py-3" aria-live="polite">
 	<div class="flex items-center justify-between gap-3">
-		<p class="text-[13px] font-medium {tone.text}">{title ?? tone.label} · <span class="font-normal">{outcome.summary}</span></p>
+		<p class="text-[13px] font-medium {tone.text}">{title ?? t(tone.label)} · <span class="font-normal">{outcome.summary}</span></p>
 		{#if outcome.score !== undefined && outcome.score !== null}
 			<span class="font-mono text-[12px] {tone.text}">{Math.round(outcome.score * 100)}%</span>
 		{/if}

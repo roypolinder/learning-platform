@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::localization::{CourseTranslation, Locale};
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CourseDefinition {
@@ -29,6 +31,9 @@ pub struct CourseDefinition {
     pub objectives: Vec<String>,
     #[serde(default)]
     pub prerequisites: Vec<PrerequisiteDefinition>,
+    /// Key terms of the course, shown in the learner's glossary sidebar.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub glossary: Vec<GlossaryEntry>,
     /// Extensions the course relies on. Validated against actual step usage.
     #[serde(default)]
     pub extensions: Vec<String>,
@@ -37,6 +42,18 @@ pub struct CourseDefinition {
     pub sections: Vec<SectionDefinition>,
     #[serde(default)]
     pub completion: CompletionDefinition,
+    /// Text overlays per language. Course files keep them in `locales/<lang>/<id>.yaml`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub translations: BTreeMap<Locale, CourseTranslation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GlossaryEntry {
+    /// Kept in English in every language: it is what developers actually say.
+    pub term: String,
+    /// Markdown.
+    pub definition: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

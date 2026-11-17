@@ -7,6 +7,7 @@ pub struct User {
     pub email: String,
     pub display_name: String,
     pub role: String,
+    pub locale: String,
     pub created_at: DateTime<Utc>,
 }
 

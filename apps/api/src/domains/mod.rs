@@ -3,6 +3,8 @@ pub mod authoring;
 pub mod courses;
 pub mod extensions;
 pub mod integrations;
+pub mod learners;
+pub mod notes;
 pub mod oauth;
 pub mod progress;
 pub mod sessions;
