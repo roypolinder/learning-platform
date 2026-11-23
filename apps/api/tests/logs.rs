@@ -82,7 +82,7 @@ async fn super_admins_read_the_log_and_test_email() {
         app.mail
             .sent()
             .iter()
-            .any(|email| email.to == "admin@example.com" && email.subject.contains("Test"))
+            .any(|email| email.to == "admin@example.com" && email.subject.contains("email check"))
     );
     app.cleanup().await;
 }

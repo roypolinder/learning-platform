@@ -17,7 +17,8 @@ use crate::domains::auth::service::{confirm_password, hash_password_blocking, pa
 use crate::domains::users::domain::{ROLE_SUPER_ADMIN, User, is_plausible_email, normalize_email};
 use crate::domains::users::repository as users;
 use crate::error::{ApiError, ApiResult, FieldError};
-use crate::mail::{self, OutgoingEmail, templates};
+use crate::mail::templates::Templates;
+use crate::mail::{self, OutgoingEmail};
 use crate::observability::AUDIT;
 use crate::security::{generate_token, hash_token};
 use crate::state::AppState;
@@ -80,7 +81,11 @@ pub async fn send_verification(state: &AppState, user: &User) -> ApiResult<()> {
     let link = issue_link(state, user.id, TokenPurpose::VerifyEmail, &user.email).await?;
     send_limited(
         state,
-        templates::verify_email(&user.locale, &user.email, &user.display_name, &link),
+        Templates::new(&user.locale, &state.config.web_base_url).verify_email(
+            &user.email,
+            &user.display_name,
+            &link,
+        ),
     )
 }
 
@@ -108,7 +113,11 @@ pub fn forgot_password(state: &AppState, email: &str) {
                 issue_link(&state, user.id, TokenPurpose::ResetPassword, &user.email).await?;
             send_limited(
                 &state,
-                templates::reset_password(&user.locale, &user.email, &user.display_name, &link),
+                Templates::new(&user.locale, &state.config.web_base_url).reset_password(
+                    &user.email,
+                    &user.display_name,
+                    &link,
+                ),
             )
         }
         .await;
@@ -220,12 +229,15 @@ pub async fn request_email_change(
     let link = issue_link(state, user.id, TokenPurpose::ChangeEmail, &new_email).await?;
     mail::send_in_background(
         &state.mailer,
-        templates::confirm_new_email(&user.locale, &new_email, &user.display_name, &link),
+        Templates::new(&user.locale, &state.config.web_base_url).confirm_new_email(
+            &new_email,
+            &user.display_name,
+            &link,
+        ),
     );
     mail::send_in_background(
         &state.mailer,
-        templates::email_change_requested(
-            &user.locale,
+        Templates::new(&user.locale, &state.config.web_base_url).email_change_requested(
             &user.email,
             &user.display_name,
             &new_email,
@@ -266,7 +278,8 @@ pub async fn change_password(
     tracing::info!(target: AUDIT, category = "account", %user_id, "password changed");
     mail::send_in_background(
         &state.mailer,
-        templates::password_changed(&user.locale, &user.email, &user.display_name),
+        Templates::new(&user.locale, &state.config.web_base_url)
+            .password_changed(&user.email, &user.display_name),
     );
     Ok(())
 }
@@ -296,7 +309,8 @@ pub async fn delete_account(
     tracing::info!(target: AUDIT, category = "account", %user_id, email = %user.email, "account deleted by its owner");
     mail::send_in_background(
         &state.mailer,
-        templates::account_deleted(&user.locale, &user.email, &user.display_name),
+        Templates::new(&user.locale, &state.config.web_base_url)
+            .account_deleted(&user.email, &user.display_name),
     );
     Ok(())
 }

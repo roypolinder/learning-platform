@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use lettre::message::Mailbox;
+use lettre::message::MultiPart;
 use lettre::message::header::ContentType;
+use lettre::transport::smtp::extension::ClientId;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 use crate::config::AppConfig;
@@ -18,8 +20,10 @@ use crate::observability::AUDIT;
 pub struct OutgoingEmail {
     pub to: String,
     pub subject: String,
-    /// Plain text. Transactional mail needs no HTML, and plain text is never flagged for it.
+    /// Plain text; always sent, for clients that don't show HTML.
     pub body: String,
+    /// Optional HTML version of the same content.
+    pub html: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -39,7 +43,16 @@ pub trait Mailer: Send + Sync {
 /// Picks SMTP when configured, otherwise the log.
 pub fn from_config(config: &AppConfig) -> Result<Arc<dyn Mailer>, MailError> {
     match &config.smtp_url {
-        Some(url) => Ok(Arc::new(SmtpMailer::new(url.expose(), &config.mail_from)?)),
+        Some(url) => {
+            let host = url::Url::parse(&config.public_base_url)
+                .ok()
+                .and_then(|url| url.host_str().map(str::to_owned));
+            Ok(Arc::new(SmtpMailer::new(
+                url.expose(),
+                &config.mail_from,
+                host.as_deref(),
+            )?))
+        }
         None => {
             if config.web_dist_dir.is_some() {
                 tracing::warn!(
@@ -91,14 +104,25 @@ pub struct SmtpMailer {
     from: Mailbox,
 }
 
+/// Spam filters penalise a short host name such as `learn` in the SMTP greeting, so greet with
+/// the platform's public host name when it is a real domain.
+fn hello_name(public_host: Option<&str>) -> Option<ClientId> {
+    public_host
+        .filter(|host| host.contains('.') && host.parse::<std::net::IpAddr>().is_err())
+        .map(|host| ClientId::Domain(host.to_owned()))
+}
+
 impl SmtpMailer {
     /// `url` follows lettre's format: `smtps://user:pass@host:465` (implicit TLS) or
     /// `smtp://user:pass@host:587?tls=required` (STARTTLS).
-    pub fn new(url: &str, from: &str) -> Result<Self, MailError> {
+    pub fn new(url: &str, from: &str, public_host: Option<&str>) -> Result<Self, MailError> {
         check_smtp_url(url)?;
-        let transport = AsyncSmtpTransport::<Tokio1Executor>::from_url(url)
-            .map_err(|error| MailError::Config(format!("SMTP_URL: {error}")))?
-            .build();
+        let mut builder = AsyncSmtpTransport::<Tokio1Executor>::from_url(url)
+            .map_err(|error| MailError::Config(format!("SMTP_URL: {error}")))?;
+        if let Some(name) = hello_name(public_host) {
+            builder = builder.hello_name(name);
+        }
+        let transport = builder.build();
         let from = from
             .parse()
             .map_err(|error| MailError::Config(format!("MAIL_FROM: {error}")))?;
@@ -131,13 +155,23 @@ impl Mailer for SmtpMailer {
             .to
             .parse()
             .map_err(|error| MailError::Send(format!("recipient: {error}")))?;
-        let message = Message::builder()
+        // A Message-ID is expected on every email; lettre leaves it out unless asked, and its
+        // default would use the server's short host name.
+        let message_id = format!(
+            "<{}@{}>",
+            uuid::Uuid::now_v7().simple(),
+            self.from.email.domain()
+        );
+        let builder = Message::builder()
+            .message_id(Some(message_id))
             .from(self.from.clone())
             .to(to)
-            .subject(email.subject)
-            .header(ContentType::TEXT_PLAIN)
-            .body(email.body)
-            .map_err(|error| MailError::Send(error.to_string()))?;
+            .subject(email.subject);
+        let message = match email.html {
+            Some(html) => builder.multipart(MultiPart::alternative_plain_html(email.body, html)),
+            None => builder.header(ContentType::TEXT_PLAIN).body(email.body),
+        }
+        .map_err(|error| MailError::Send(error.to_string()))?;
         let response = self
             .transport
             .send(message)
@@ -196,6 +230,17 @@ impl Mailer for MemoryMailer {
 mod tests {
     use super::*;
 
+    #[test]
+    fn greets_with_a_real_domain_only() {
+        assert!(matches!(
+            hello_name(Some("learn.polinderit.nl")),
+            Some(ClientId::Domain(name)) if name == "learn.polinderit.nl"
+        ));
+        assert!(hello_name(Some("localhost")).is_none());
+        assert!(hello_name(Some("203.0.113.7")).is_none());
+        assert!(hello_name(None).is_none());
+    }
+
     #[tokio::test]
     async fn explains_broken_smtp_urls_without_leaking_the_password() {
         let error = |url: &str| check_smtp_url(url).unwrap_err().to_string();
@@ -209,7 +254,12 @@ mod tests {
         assert!(error("smtps://smtp.x:465").contains("credentials"));
         assert!(check_smtp_url("smtps://a%40b.nl:p%24ss@smtp.transip.email:465").is_ok());
         assert!(
-            SmtpMailer::new("smtps://a%40b.nl:pw@smtp.transip.email:465", "LP <a@b.nl>").is_ok()
+            SmtpMailer::new(
+                "smtps://a%40b.nl:pw@smtp.transip.email:465",
+                "LP <a@b.nl>",
+                Some("learn.polinderit.nl")
+            )
+            .is_ok()
         );
     }
 }

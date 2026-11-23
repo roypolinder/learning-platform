@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::error::{ApiError, ApiResult};
 use crate::http::auth::SuperAdmin;
 use crate::http::pagination::{Page, PageParams};
-use crate::mail::{self, OutgoingEmail};
+use crate::mail::{self, templates::Templates};
 use crate::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -129,15 +129,8 @@ pub async fn send_test_email(
     state
         .mail_limiter
         .check(&format!("mail:{}", admin.email.to_lowercase()))?;
-    let email = OutgoingEmail {
-        to: admin.email.clone(),
-        subject: "Test email from the Learning Platform".into(),
-        body: format!(
-            "Hi {},\n\nThis is a test email, sent from the log page. If you can read this, account \
-             emails work.\n\n— Learning Platform\n",
-            admin.display_name
-        ),
-    };
+    let email = Templates::new("en", &state.config.web_base_url)
+        .test_email(&admin.email, &admin.display_name);
     match mail::send_logged(state.mailer.as_ref(), email).await {
         Ok(response) => Ok(Json(TestEmailResult {
             to: admin.email,
