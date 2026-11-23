@@ -163,14 +163,24 @@ public_ip() {
 
 port_owner() { ss -ltnpH "sport = :$1" 2>/dev/null | sed -n 's/.*users:((\"\([^"]*\)".*/\1/p' | head -n1; }
 
+# Exports KEY=VALUE lines from the config the way systemd's EnvironmentFile reads them: values
+# are literal text (no shell expansion, so `<`, `$` or spaces are fine) and surrounding double
+# quotes are removed. Sourcing the file with `.` would run values as shell code.
+load_env_file() { # load_env_file FILE
+	local line key value
+	while IFS= read -r line || [[ -n $line ]]; do
+		[[ $line =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]] || continue
+		key=${BASH_REMATCH[1]} value=${BASH_REMATCH[2]}
+		[[ $value =~ ^\"(.*)\"$ ]] && value=${BASH_REMATCH[1]}
+		export "$key=$value"
+	done <"$1"
+}
+
 as_service_user() { # runs the app binary of a release with the production environment
 	local release=$1
 	shift
 	(
-		set -a
-		# shellcheck disable=SC1090
-		. "$ENV_FILE"
-		set +a
+		load_env_file "$ENV_FILE"
 		export COURSES_DIR="$release/courses" WEB_DIST_DIR="$release/web"
 		cd "$release"
 		runuser -u "$SERVICE_USER" -- "$release/bin/$APP" "$@"
@@ -645,9 +655,8 @@ EOF
 #!/usr/bin/env bash
 set -euo pipefail
 [[ \$EUID -eq 0 ]] || exec sudo "\$0" "\$@"
-set -a
-. $ENV_FILE
-set +a
+$(declare -f load_env_file)
+load_env_file $ENV_FILE
 cd $CURRENT_LINK
 exec runuser -u $SERVICE_USER -- $CURRENT_LINK/bin/$APP "\$@"
 EOF
