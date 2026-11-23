@@ -127,6 +127,15 @@ impl TestApp {
             .count()
     }
 
+    /// A connection pool to the test database, for arranging data directly.
+    pub async fn pool(&self) -> sqlx::PgPool {
+        PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&self.database_url)
+            .await
+            .unwrap()
+    }
+
     pub fn url(&self, path: &str) -> String {
         format!("{}{path}", self.base)
     }

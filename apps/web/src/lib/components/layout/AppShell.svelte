@@ -16,6 +16,7 @@
 		{ href: '/courses', label: 'nav.courses', icon: 'book' },
 		{ href: '/admin/courses', label: 'nav.studio', icon: 'edit', requiresAdmin: true },
 		{ href: '/admin/users', label: 'nav.users', icon: 'users', requiresAdmin: true },
+		{ href: '/admin/logs', label: 'nav.logs', icon: 'terminal', requiresAdmin: true },
 		{ href: '/admin/traffic', label: 'nav.traffic', icon: 'chart', requiresAdmin: true },
 		{ href: '/settings', label: 'nav.settings', icon: 'settings', requiresAuth: true }
 	];
@@ -82,7 +83,7 @@
 			<nav class="flex flex-wrap gap-3 text-[13px] text-fg-muted">
 				{#if auth.user}<a href="/dashboard">{t('nav.dashboard')}</a>{/if}
 				<a href="/courses">{t('nav.courses')}</a>
-				{#if auth.isSuperAdmin}<a href="/admin/courses">{t('nav.studio_short')}</a><a href="/admin/users">{t('nav.users')}</a><a href="/admin/traffic">{t('nav.traffic')}</a>{/if}
+				{#if auth.isSuperAdmin}<a href="/admin/courses">{t('nav.studio_short')}</a><a href="/admin/users">{t('nav.users')}</a><a href="/admin/logs">{t('nav.logs')}</a><a href="/admin/traffic">{t('nav.traffic')}</a>{/if}
 				{#if auth.user}<a href="/settings">{t('nav.settings')}</a>{:else}<a href="/login">{t('nav.sign_in')}</a>{/if}
 			</nav>
 		</header>

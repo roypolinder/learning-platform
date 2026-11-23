@@ -294,6 +294,29 @@ export interface AdminUsersResponse {
 	users: Page<AdminUser>;
 }
 
+export type LogLevel = 'error' | 'warn' | 'info';
+
+export interface LogEntry {
+	id: string;
+	created_at: string;
+	level: LogLevel;
+	target: string;
+	category: string | null;
+	message: string;
+	fields: Record<string, unknown>;
+}
+
+export interface LogsResponse {
+	counts: { errors_24h: number; warnings_24h: number };
+	retention_days: number;
+	logs: Page<LogEntry>;
+}
+
+export interface TestEmailResult {
+	to: string;
+	response: string;
+}
+
 export interface TrafficReport {
 	generated_at: string;
 	/** Self-contained HTML document; render only inside a sandboxed iframe. */

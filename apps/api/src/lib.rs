@@ -6,6 +6,7 @@ pub mod error;
 pub mod http;
 pub mod mail;
 pub mod mcp;
+pub mod observability;
 pub mod realtime;
 pub mod security;
 pub mod state;

@@ -150,6 +150,11 @@ DKIM at the provider, and name the provider in `apps/web/src/routes/privacy/+pag
 (`mailProvider`), since it processes learners' email addresses. In development the emails and
 their links appear in the API log.
 
+`/admin/logs` (super admins) shows errors, warnings and events such as every email sent with
+the mail server's reply, sign-ups and account changes, kept for 30 days in `system_logs`. Its
+**Send test email** button sends to your own address and shows the server's answer right away.
+`RUST_LOG` only filters the journal, not this log.
+
 Super admins see every account at `/admin/users`: sign-ups per day, verified or not, last
 sign-in and course activity, to spot automated sign-ups.
 

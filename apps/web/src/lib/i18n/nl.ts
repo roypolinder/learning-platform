@@ -29,6 +29,7 @@ export const nl: Record<MessageKey, string> = {
 	'nav.studio_short': 'Studio',
 	'nav.traffic': 'Verkeer',
 	'nav.users': 'Gebruikers',
+	'nav.logs': 'Logs',
 	'nav.settings': 'Instellingen',
 	'nav.sign_in': 'Inloggen',
 	'nav.sign_out': 'Uitloggen',

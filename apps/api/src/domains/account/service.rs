@@ -18,6 +18,7 @@ use crate::domains::users::domain::{ROLE_SUPER_ADMIN, User, is_plausible_email, 
 use crate::domains::users::repository as users;
 use crate::error::{ApiError, ApiResult, FieldError};
 use crate::mail::{self, OutgoingEmail, templates};
+use crate::observability::AUDIT;
 use crate::security::{generate_token, hash_token};
 use crate::state::AppState;
 
@@ -139,6 +140,7 @@ pub async fn reset_password(state: &AppState, request: ResetPasswordRequest) -> 
     repository::invalidate_tokens(&mut *tx, token.user_id, TokenPurpose::ResetPassword).await?;
     repository::revoke_sessions(&mut *tx, token.user_id, None).await?;
     tx.commit().await?;
+    tracing::info!(target: AUDIT, category = "account", user_id = %token.user_id, "password reset by email link");
     Ok(())
 }
 
@@ -165,6 +167,7 @@ pub async fn confirm_email(state: &AppState, token: &str) -> ApiResult<TokenResu
                     message: "An account with this email already exists.".into(),
                 })?;
             // Links sent to the old address must stop working.
+            tracing::info!(target: AUDIT, category = "account", %user_id, new_email = %email, "email address changed");
             for stale in [
                 TokenPurpose::ChangeEmail,
                 TokenPurpose::VerifyEmail,
@@ -260,6 +263,7 @@ pub async fn change_password(
     repository::invalidate_tokens(&mut *tx, user_id, TokenPurpose::ResetPassword).await?;
     repository::revoke_sessions(&mut *tx, user_id, Some(current_session)).await?;
     tx.commit().await?;
+    tracing::info!(target: AUDIT, category = "account", %user_id, "password changed");
     mail::send_in_background(
         &state.mailer,
         templates::password_changed(&user.locale, &user.email, &user.display_name),
@@ -289,7 +293,7 @@ pub async fn delete_account(
         return Err(ApiError::Unauthorized);
     }
     tx.commit().await?;
-    tracing::info!(%user_id, "account deleted by its owner");
+    tracing::info!(target: AUDIT, category = "account", %user_id, email = %user.email, "account deleted by its owner");
     mail::send_in_background(
         &state.mailer,
         templates::account_deleted(&user.locale, &user.email, &user.display_name),

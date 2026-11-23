@@ -24,6 +24,7 @@ export const en = {
 	'nav.studio_short': 'Studio',
 	'nav.traffic': 'Traffic',
 	'nav.users': 'Users',
+	'nav.logs': 'Logs',
 	'nav.settings': 'Settings',
 	'nav.sign_in': 'Sign in',
 	'nav.sign_out': 'Sign out',

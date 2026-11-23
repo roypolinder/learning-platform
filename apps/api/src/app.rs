@@ -20,8 +20,8 @@ use tower_http::trace::TraceLayer;
 use crate::config::AppConfig;
 use crate::db;
 use crate::domains::{
-    account, auth, authoring, courses, extensions, integrations, learners, notes, oauth, progress,
-    sessions, traffic, users,
+    account, auth, authoring, courses, extensions, integrations, learners, logs, notes, oauth,
+    progress, sessions, traffic, users,
 };
 use crate::error::ApiError;
 use crate::http::csrf;
@@ -65,6 +65,7 @@ pub async fn bootstrap_with_pool(
     pool: sqlx::PgPool,
 ) -> Result<AppState, StartupError> {
     db::migrate(&pool).await?;
+    crate::observability::start_writer(pool.clone());
     let mailer = crate::mail::from_config(&config)?;
     let promoted =
         users::repository::promote_super_admins(&pool, &config.super_admin_emails).await?;
@@ -99,6 +100,7 @@ pub fn router(state: AppState, shutdown: CancellationToken) -> Router {
         .merge(notes::routes())
         .merge(authoring::routes())
         .merge(traffic::routes())
+        .merge(logs::routes())
         .merge(oauth::routes())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

@@ -7,6 +7,7 @@ use lp_api::db;
 use lp_course_engine::{CatalogError, check_renders, load_directory, load_themes};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::prelude::*;
 
 const USAGE: &str =
     "usage: learning-platform [serve | migrate | check-courses | grant-super-admin <email>]";
@@ -14,11 +15,12 @@ const USAGE: &str =
 #[tokio::main]
 async fn main() -> ExitCode {
     let _ = dotenvy::dotenv();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,lp_api=debug,sqlx=warn,tower_http=info")),
-        )
+    let console_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,lp_api=debug,sqlx=warn,tower_http=info"));
+    // RUST_LOG only filters the console; warnings, errors and audit events are always stored.
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer().with_filter(console_filter))
+        .with(lp_api::observability::layer())
         .init();
 
     let command = std::env::args().nth(1).unwrap_or_else(|| "serve".into());
@@ -57,6 +59,12 @@ async fn main() -> ExitCode {
 async fn serve(config: AppConfig) -> Result<(), Box<dyn std::error::Error>> {
     let address = config.bind_address;
     let state = app::bootstrap(config).await?;
+    tracing::info!(
+        target: lp_api::observability::AUDIT,
+        category = "server",
+        version = env!("CARGO_PKG_VERSION"),
+        "server started"
+    );
     let shutdown = CancellationToken::new();
     let router = app::router(state, shutdown.clone());
     let listener = tokio::net::TcpListener::bind(address).await?;

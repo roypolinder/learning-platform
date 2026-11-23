@@ -94,6 +94,15 @@
 							<td>{logRetentionDays} days</td>
 						</tr>
 						<tr>
+							<td>
+								Application log (administrators only): errors, warnings and account events such as emails sent (with the mail server's reply),
+								sign-ups, password and email changes and deletions. These entries can contain your email address or user ID.
+							</td>
+							<td>Finding and fixing problems, for example emails that do not arrive, and detecting abuse</td>
+							<td>Legitimate interest (Art. 6(1)(f))</td>
+							<td>{logRetentionDays} days, then deleted automatically</td>
+						</tr>
+						<tr>
 							<td>Traffic statistics (administrators only), generated from the logs</td>
 							<td>Understanding how much the platform is used</td>
 							<td>Legitimate interest (Art. 6(1)(f))</td>

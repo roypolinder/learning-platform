@@ -12,6 +12,7 @@ use lettre::message::header::ContentType;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 
 use crate::config::AppConfig;
+use crate::observability::AUDIT;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutgoingEmail {
@@ -31,7 +32,8 @@ pub enum MailError {
 
 #[async_trait]
 pub trait Mailer: Send + Sync {
-    async fn send(&self, email: OutgoingEmail) -> Result<(), MailError>;
+    /// Returns the receiving server's reply, e.g. `250 2.0.0 Ok: queued as 4Xyz`.
+    async fn send(&self, email: OutgoingEmail) -> Result<String, MailError>;
 }
 
 /// Picks SMTP when configured, otherwise the log.
@@ -50,16 +52,38 @@ pub fn from_config(config: &AppConfig) -> Result<Arc<dyn Mailer>, MailError> {
     }
 }
 
-/// Sends without making the request wait for the mail server. Failures are logged; the
-/// learner can ask for a new email.
+/// Sends without making the request wait for the mail server. The outcome, including the
+/// server's reply, lands in the admin log; the learner can ask for a new email.
 pub fn send_in_background(mailer: &Arc<dyn Mailer>, email: OutgoingEmail) {
     let mailer = Arc::clone(mailer);
     tokio::spawn(async move {
-        let subject = email.subject.clone();
-        if let Err(error) = mailer.send(email).await {
-            tracing::error!(%error, %subject, "account email not sent");
-        }
+        let _ = send_logged(mailer.as_ref(), email).await;
     });
+}
+
+/// Sends now and records the result in the admin log.
+pub async fn send_logged(mailer: &dyn Mailer, email: OutgoingEmail) -> Result<String, MailError> {
+    let (to, subject) = (email.to.clone(), email.subject.clone());
+    let result = mailer.send(email).await;
+    match &result {
+        Ok(response) => tracing::info!(
+            target: AUDIT,
+            category = "mail",
+            %to,
+            %subject,
+            %response,
+            "email sent"
+        ),
+        Err(error) => tracing::error!(
+            target: AUDIT,
+            category = "mail",
+            %to,
+            %subject,
+            %error,
+            "email not sent"
+        ),
+    }
+    result
 }
 
 pub struct SmtpMailer {
@@ -102,7 +126,7 @@ fn check_smtp_url(url: &str) -> Result<(), MailError> {
 
 #[async_trait]
 impl Mailer for SmtpMailer {
-    async fn send(&self, email: OutgoingEmail) -> Result<(), MailError> {
+    async fn send(&self, email: OutgoingEmail) -> Result<String, MailError> {
         let to: Mailbox = email
             .to
             .parse()
@@ -114,11 +138,15 @@ impl Mailer for SmtpMailer {
             .header(ContentType::TEXT_PLAIN)
             .body(email.body)
             .map_err(|error| MailError::Send(error.to_string()))?;
-        self.transport
+        let response = self
+            .transport
             .send(message)
             .await
-            .map(|_| ())
-            .map_err(|error| MailError::Send(error.to_string()))
+            .map_err(|error| MailError::Send(error.to_string()))?;
+        let text: Vec<&str> = response.message().collect();
+        Ok(format!("{} {}", response.code(), text.join(" "))
+            .trim()
+            .to_owned())
     }
 }
 
@@ -127,14 +155,14 @@ pub struct LogMailer;
 
 #[async_trait]
 impl Mailer for LogMailer {
-    async fn send(&self, email: OutgoingEmail) -> Result<(), MailError> {
+    async fn send(&self, email: OutgoingEmail) -> Result<String, MailError> {
         tracing::info!(
             to = %email.to,
             subject = %email.subject,
             "email not sent (SMTP_URL is not set):\n{}",
             email.body
         );
-        Ok(())
+        Ok("not sent: SMTP_URL is not set, the email is in the server log".into())
     }
 }
 
@@ -155,12 +183,12 @@ impl MemoryMailer {
 
 #[async_trait]
 impl Mailer for MemoryMailer {
-    async fn send(&self, email: OutgoingEmail) -> Result<(), MailError> {
+    async fn send(&self, email: OutgoingEmail) -> Result<String, MailError> {
         self.sent
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(email);
-        Ok(())
+        Ok("kept in memory".into())
     }
 }
 

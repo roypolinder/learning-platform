@@ -52,6 +52,13 @@ pub async fn register(state: &AppState, request: RegisterRequest) -> ApiResult<I
         code: "email_taken",
         message: "An account with this email already exists.".into(),
     })?;
+    tracing::info!(
+        target: crate::observability::AUDIT,
+        category = "account",
+        user_id = %user.id,
+        email = %user.email,
+        "account registered"
+    );
     if let Err(error) = account::send_verification(state, &user).await {
         tracing::warn!(%error, "verification email not queued");
     }
