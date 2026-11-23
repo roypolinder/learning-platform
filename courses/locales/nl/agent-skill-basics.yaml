@@ -24,8 +24,8 @@ shared_sections:
         title: Controleer dat je agent gekoppeld is
         body: |
           In deze cursus stuurt je agent bestanden in. Zorg dat de server `learning-platform` uit
-          de MCP-cursus draait (kies **Authenticate** als VS Code zegt dat er authenticatie nodig
-          is) en vraag je agent: **"Wat is mijn huidige stap op het learning platform?"**
+          de MCP-cursus draait (log opnieuw in als je agent zegt dat er authenticatie nodig is)
+          en vraag je agent: **"Wat is mijn huidige stap op het learning platform?"**
 sections:
   learn:
     title: Wat een goede skill is
@@ -34,7 +34,9 @@ sections:
         title: Skills in één minuut
         body: |
           Een skill is een map met een bestand `SKILL.md` en eventueel scripts of
-          referentiebestanden. In VS Code staan ze in `.github/skills/<skill-naam>/`.
+          referentiebestanden. Waar ze staan hangt af van je agent: Claude Code en OpenCode lezen
+          `.claude/skills/<skill-naam>/`, VS Code met GitHub Copilot leest
+          `.github/skills/<skill-naam>/`. Andere agents beschrijven hun eigen map.
 
           Agents lezen niet alle skills vooraf. Bij het opstarten zien ze alleen de **name en
           description** van elke skill uit de YAML-frontmatter. Past een vraag bij een
@@ -79,7 +81,8 @@ sections:
       write-skill:
         title: Schrijf de skill met je agent
         body: |
-          Schrijf een skill met de naam `site-conventions` in
+          Schrijf een skill met de naam `site-conventions` in de skills-map van je agent,
+          bijvoorbeeld `.claude/skills/site-conventions/SKILL.md` of
           `.github/skills/site-conventions/SKILL.md`. Vraag je agent om hulp, maar bepaal de
           inhoud zelf. Een goede skill met afspraken voor {{theme.data.site.name}} bevat:
 

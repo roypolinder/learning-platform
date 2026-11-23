@@ -5,6 +5,7 @@
 	import Icon, { type IconName } from '#lib/components/ui/Icon.svelte';
 	import Logo from '#lib/components/ui/Logo.svelte';
 	import LanguagePicker from '#lib/components/ui/LanguagePicker.svelte';
+	import VerifyEmailBanner from '#lib/features/authentication/VerifyEmailBanner.svelte';
 	import { i18n, t, type MessageKey } from '#lib/i18n/index.svelte.ts';
 	import { auth } from '#lib/state/auth.svelte.ts';
 
@@ -14,6 +15,7 @@
 		{ href: '/dashboard', label: 'nav.dashboard', icon: 'home', requiresAuth: true },
 		{ href: '/courses', label: 'nav.courses', icon: 'book' },
 		{ href: '/admin/courses', label: 'nav.studio', icon: 'edit', requiresAdmin: true },
+		{ href: '/admin/users', label: 'nav.users', icon: 'users', requiresAdmin: true },
 		{ href: '/admin/traffic', label: 'nav.traffic', icon: 'chart', requiresAdmin: true },
 		{ href: '/settings', label: 'nav.settings', icon: 'settings', requiresAuth: true }
 	];
@@ -80,10 +82,11 @@
 			<nav class="flex flex-wrap gap-3 text-[13px] text-fg-muted">
 				{#if auth.user}<a href="/dashboard">{t('nav.dashboard')}</a>{/if}
 				<a href="/courses">{t('nav.courses')}</a>
-				{#if auth.isSuperAdmin}<a href="/admin/courses">{t('nav.studio_short')}</a><a href="/admin/traffic">{t('nav.traffic')}</a>{/if}
+				{#if auth.isSuperAdmin}<a href="/admin/courses">{t('nav.studio_short')}</a><a href="/admin/users">{t('nav.users')}</a><a href="/admin/traffic">{t('nav.traffic')}</a>{/if}
 				{#if auth.user}<a href="/settings">{t('nav.settings')}</a>{:else}<a href="/login">{t('nav.sign_in')}</a>{/if}
 			</nav>
 		</header>
+		<VerifyEmailBanner />
 		<main class="flex-1">{@render children()}</main>
 		<footer class="border-t border-line px-6 py-3 text-[12px] text-fg-subtle">
 			<a href="/privacy" class="hover:text-fg hover:underline">{t('common.privacy')}</a>

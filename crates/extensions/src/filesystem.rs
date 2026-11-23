@@ -9,7 +9,7 @@ use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 use crate::evidence::{FileEvidence, SubmittedFile, path_matches};
-use crate::support::{collect_issues, parse_submission, unsupported_step_type};
+use crate::support::{parse_submission, unsupported_step_type};
 
 pub const ID: &str = "filesystem";
 const FILESYSTEM_VALIDATION: &str = "filesystem_validation";
@@ -94,14 +94,56 @@ struct FrontmatterRule {
     max_length: std::collections::BTreeMap<String, usize>,
 }
 
+/// One document to check, or several alternatives such as the MCP configuration files of
+/// different agents. With `variants`, the first variant whose file was submitted is checked
+/// against the rules for that file.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DocumentConfig {
-    file: String,
-    format: DocumentFormat,
+    #[serde(default)]
+    file: Option<String>,
+    #[serde(default)]
+    format: Option<DocumentFormat>,
+    #[serde(default)]
+    variants: Vec<DocumentVariant>,
     #[serde(default)]
     #[allow(dead_code)]
     instructions: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DocumentVariant {
+    file: String,
+    format: DocumentFormat,
+    /// Who uses this file, e.g. "OpenCode". Shown to learners.
+    #[serde(default)]
+    #[allow(dead_code)]
+    label: Option<String>,
+}
+
+impl DocumentConfig {
+    /// `(file, format)` pairs in order of preference.
+    fn documents(&self) -> Vec<(&str, DocumentFormat)> {
+        match (&self.file, self.format) {
+            (Some(file), Some(format)) => vec![(file.as_str(), format)],
+            _ => self
+                .variants
+                .iter()
+                .map(|variant| (variant.file.as_str(), variant.format))
+                .collect(),
+        }
+    }
+
+    fn issues(&self) -> Vec<String> {
+        match (&self.file, self.format, self.variants.is_empty()) {
+            (Some(_), Some(_), true) | (None, None, false) => Vec::new(),
+            (Some(_), None, _) | (None, Some(_), _) => {
+                vec!["config.file and config.format go together".into()]
+            }
+            _ => vec!["config needs either file + format or variants".into()],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -109,12 +151,39 @@ struct DocumentConfig {
 enum DocumentFormat {
     Json,
     Yaml,
+    Toml,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DocumentRules {
+    #[serde(default)]
     rules: Vec<DocumentRule>,
+    /// Rules per alternative file; pairs with `config.variants`.
+    #[serde(default)]
+    variants: Vec<VariantRules>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct VariantRules {
+    file: String,
+    rules: Vec<DocumentRule>,
+}
+
+impl DocumentRules {
+    fn for_file(&self, file: &str) -> &[DocumentRule] {
+        self.variants
+            .iter()
+            .find(|variant| variant.file == file)
+            .map_or(self.rules.as_slice(), |variant| variant.rules.as_slice())
+    }
+
+    fn all(&self) -> impl Iterator<Item = &DocumentRule> {
+        self.rules
+            .iter()
+            .chain(self.variants.iter().flat_map(|variant| &variant.rules))
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -149,22 +218,53 @@ impl Extension for FilesystemExtension {
     ) -> Result<(), Vec<String>> {
         match step_type {
             FILESYSTEM_VALIDATION => file_rules(validation).map(|_| ()),
-            CONFIGURATION_VALIDATION => collect_issues([
-                parse_config::<DocumentConfig>("config", config).map(|_| ()),
-                parse_config::<DocumentRules>("validation", validation).and_then(|rules| {
-                    let issues: Vec<String> = rules
-                        .rules
-                        .iter()
-                        .filter(|rule| !rule.pointer.starts_with('/'))
-                        .map(|rule| format!("`{}` must be a JSON pointer", rule.pointer))
+            CONFIGURATION_VALIDATION => {
+                let config = parse_config::<DocumentConfig>("config", config);
+                let rules = parse_config::<DocumentRules>("validation", validation);
+                let mut issues = Vec::new();
+                if let Err(problems) = &config {
+                    issues.extend(problems.iter().cloned());
+                }
+                if let Err(problems) = &rules {
+                    issues.extend(problems.iter().cloned());
+                }
+                if let Ok(rules) = &rules {
+                    issues.extend(
+                        rules
+                            .all()
+                            .filter(|rule| !rule.pointer.starts_with('/'))
+                            .map(|rule| format!("`{}` must be a JSON pointer", rule.pointer)),
+                    );
+                }
+                if let (Ok(config), Ok(rules)) = (&config, &rules) {
+                    issues.extend(config.issues());
+                    let files: Vec<&str> = config
+                        .documents()
+                        .into_iter()
+                        .map(|(file, _)| file)
                         .collect();
-                    if issues.is_empty() {
-                        Ok(())
-                    } else {
-                        Err(issues)
-                    }
-                }),
-            ]),
+                    issues.extend(
+                        files
+                            .iter()
+                            .filter(|file| rules.for_file(file).is_empty())
+                            .map(|file| format!("validation has no rules for `{file}`")),
+                    );
+                    issues.extend(
+                        rules
+                            .variants
+                            .iter()
+                            .filter(|variant| !files.contains(&variant.file.as_str()))
+                            .map(|variant| {
+                                format!("validation.variants `{}` is not in config", variant.file)
+                            }),
+                    );
+                }
+                if issues.is_empty() {
+                    Ok(())
+                } else {
+                    Err(issues)
+                }
+            }
             generic if GENERIC_TYPES.contains(&generic) => file_rules(validation).map(|_| ()),
             other => Err(unsupported_step_type(ID, other)),
         }
@@ -340,24 +440,35 @@ fn check_document(
     rules: &DocumentRules,
     files: &[SubmittedFile],
 ) -> ValidationOutcome {
-    let Some(file) = files
-        .iter()
-        .find(|file| path_matches(&config.file, &file.path))
-    else {
-        return ValidationOutcome::failed(format!("`{}` was not submitted", config.file))
-            .with_checks(vec![CheckResult::new(
+    let documents = config.documents();
+    let submitted = documents.iter().find_map(|(pattern, format)| {
+        files
+            .iter()
+            .find(|file| path_matches(pattern, &file.path))
+            .map(|file| (*pattern, *format, file))
+    });
+    let Some((pattern, format, file)) = submitted else {
+        let expected = documents
+            .iter()
+            .map(|(file, _)| format!("`{file}`"))
+            .collect::<Vec<_>>()
+            .join(" or ");
+        return ValidationOutcome::failed(format!("{expected} was not submitted")).with_checks(
+            vec![CheckResult::new(
                 "exists",
-                format!("`{}` exists", config.file),
+                format!("{expected} exists"),
                 false,
-            )]);
+            )],
+        );
     };
-    let document = match config.format {
+    let document = match format {
         DocumentFormat::Json => {
             serde_json::from_str::<Value>(&file.content).map_err(|e| e.to_string())
         }
         DocumentFormat::Yaml => {
             serde_saphyr::from_str::<Value>(&file.content).map_err(|e| e.to_string())
         }
+        DocumentFormat::Toml => toml::from_str::<Value>(&file.content).map_err(|e| e.to_string()),
     };
     let document = match document {
         Ok(document) => document,
@@ -369,8 +480,9 @@ fn check_document(
         }
     };
 
-    let mut checks = vec![CheckResult::new("parse", "Document parses", true)];
-    for (index, rule) in rules.rules.iter().enumerate() {
+    let mut checks =
+        vec![CheckResult::new("parse", "Document parses", true).with_detail(file.path.clone())];
+    for (index, rule) in rules.for_file(pattern).iter().enumerate() {
         let candidates = resolve_pointer(&document, &rule.pointer);
         let passed = if rule.absent {
             candidates.is_empty()
@@ -513,6 +625,70 @@ mod tests {
             .await
             .unwrap();
         assert!(outcome.is_passed(), "{outcome:?}");
+    }
+
+    #[tokio::test]
+    async fn checks_the_variant_that_was_submitted() {
+        let config = json!({ "variants": [
+            { "file": ".mcp.json", "format": "json", "label": "Claude Code" },
+            { "file": "opencode.json", "format": "json", "label": "OpenCode" },
+            { "file": ".codex/config.toml", "format": "toml", "label": "Codex" }
+        ] });
+        let validation = json!({ "variants": [
+            { "file": ".mcp.json", "rules": [ { "pointer": "/mcpServers/*/type", "equals": "http" } ] },
+            { "file": "opencode.json", "rules": [ { "pointer": "/mcp/*/type", "equals": "remote" } ] },
+            { "file": ".codex/config.toml", "rules": [ { "pointer": "/mcp_servers/*/url", "contains": "/mcp" } ] }
+        ] });
+        let extension = FilesystemExtension::new();
+        assert!(
+            extension
+                .validate_config(CONFIGURATION_VALIDATION, &config, &validation)
+                .is_ok()
+        );
+        let check = |path: &'static str, document: &'static str| {
+            let (config, validation) = (config.clone(), validation.clone());
+            async move {
+                FilesystemExtension::new()
+                    .validate_submission(
+                        &ctx(CONFIGURATION_VALIDATION, &config, &validation),
+                        &files(&[(path, document)]),
+                    )
+                    .await
+                    .unwrap()
+                    .is_passed()
+            }
+        };
+        assert!(
+            check(
+                "opencode.json",
+                r#"{ "mcp": { "lp": { "type": "remote" } } }"#
+            )
+            .await
+        );
+        assert!(
+            !check(
+                "opencode.json",
+                r#"{ "mcp": { "lp": { "type": "http" } } }"#
+            )
+            .await
+        );
+        assert!(
+            check(
+                ".codex/config.toml",
+                "[mcp_servers.learning-platform]\nurl = \"http://localhost:8080/mcp\"\n"
+            )
+            .await
+        );
+        assert!(!check("other.json", "{}").await);
+
+        let missing_rules = json!({ "variants": [
+            { "file": ".mcp.json", "rules": [ { "pointer": "/mcpServers", "absent": false } ] }
+        ] });
+        assert!(
+            extension
+                .validate_config(CONFIGURATION_VALIDATION, &config, &missing_rules)
+                .is_err()
+        );
     }
 
     #[tokio::test]

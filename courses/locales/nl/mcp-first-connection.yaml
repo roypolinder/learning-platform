@@ -17,7 +17,7 @@ objectives:
 prerequisites: [Start je project]
 glossary:
   MCP: Model Context Protocol. De open standaard waarmee AI agents tools en data uit andere programma's kunnen gebruiken.
-  Host: De applicatie waarin je werkt, zoals VS Code. Die start één MCP client per server.
+  Host: De applicatie waarin je werkt, zoals Claude Code, VS Code, Cursor of OpenCode. Die start één MCP client per server.
   MCP client: Het onderdeel in de host dat de sessie met één MCP server bijhoudt.
   MCP server: Een programma dat via MCP tools, resources of prompts aanbiedt, zoals dit learning platform.
   Tool: Een functie die het model zelf kan besluiten aan te roepen, met een naam, een beschrijving en een JSON Schema voor de input.
@@ -63,8 +63,8 @@ sections:
           verantwoordelijk voor is.
         config:
           nodes:
-            - { id: you, label: Jij, detail: "Je vraagt je agent iets in de chat van je editor." }
-            - { id: host, label: "VS Code (host)", detail: "De **host** is de applicatie waarin je werkt. Die voert het gesprek met het model en start één MCP client per geconfigureerde server." }
+            - { id: you, label: Jij, detail: "Je vraagt je agent iets, in de chat van je editor of in de terminal." }
+            - { id: host, label: "Je agent (host)", detail: "De **host** is de applicatie waarin je werkt, zoals Claude Code, VS Code, Cursor of OpenCode. Die voert het gesprek met het model en start één MCP client per geconfigureerde server." }
             - { id: client, label: MCP client, detail: "De **client** onderhoudt de sessie met één server: hij logt in, vraagt de tools op en stuurt de calls die het model wil doen." }
             - { id: server, label: "Learning platform (server)", detail: "De **server** biedt tools zoals `get_project` en `get_current_step`, en bepaalt wat elke aanroeper mag zien." }
             - { id: model, label: Taalmodel, detail: "Het model *stelt* tool calls alleen *voor*. De host en client voeren ze uit." }
@@ -99,7 +99,7 @@ sections:
             - { id: you, label: Jij }
             - { id: model, label: Taalmodel }
           chips:
-            - { id: host, label: Host (je editor) }
+            - { id: host, label: Host (je agent) }
             - { id: server, label: MCP server (het platform) }
       check-basics:
         title: Controleer wat je weet
@@ -138,21 +138,28 @@ sections:
       config-example:
         title: Een configuratie zonder geheimen
         body: |
-          VS Code leest de MCP servers van een project uit `.mcp.json` in de root van de projectmap,
-          hetzelfde bestand dat andere agents lezen. Elke entry onder `mcpServers` heeft alleen een
-          transporttype en een URL nodig; `tools` bepaalt welke tools van de server de agent mag
-          gebruiken.
+          Elke agent bewaart zijn MCP servers in een klein configuratiebestand in je project. De
+          bestandsnaam en de key op het hoogste niveau verschillen per agent, maar elke entry zegt
+          dezelfde drie dingen: een **naam** voor de server, het **transport** (HTTP, want het
+          platform is een remote server) en de **URL** van het endpoint. Kies het bestand van de
+          agent die jij gebruikt; het paneel in de volgende stappen laat het zien met de juiste URL
+          voor jou.
 
-          Let op wat er **niet** in staat: geen token, geen header `Authorization` en geen
-          `inputs`-prompt. Het platform ondersteunt OAuth, dus je editor laat je inloggen via de
-          browser en bewaart de credentials zelf. Daardoor kun je het bestand gerust committen.
+          Let op wat er in **geen** van allen staat: geen token, geen header `Authorization` en
+          geen vraag om een geheim. Het platform ondersteunt OAuth, dus je agent laat je inloggen
+          via de browser en bewaart de credentials zelf. Daardoor kun je het bestand gerust
+          committen.
         config:
           snippets:
-            - caption: Credentials komen van het inloggen, nooit uit het bestand.
+            - caption: Claude Code (terminal, desktop-app of IDE-extensie) leest `.mcp.json` in de root van het project.
+            - caption: VS Code met GitHub Copilot leest hetzelfde bestand; `tools` bepaalt welke tools de agent mag gebruiken.
+            - caption: OpenCode noemt remote servers `remote` en zet ze onder `mcp`.
+            - caption: Cursor herkent een remote server aan de `url`.
+            - caption: Codex gebruikt TOML. `codex mcp add learning-platform --url …` schrijft dit voor je.
       config-blanks:
         title: Maak de server-entry af
         config:
-          prompt: Vul de ontbrekende waarden van de configuratie in.
+          prompt: Vul de ontbrekende waarden van deze `.mcp.json` in (het formaat dat Claude Code, VS Code en Cursor delen).
           blanks:
             - { id: root, hint: De key op het hoogste niveau waaronder de servers staan. }
             - { id: transport, hint: Het transporttype voor remote servers. }
@@ -160,12 +167,12 @@ sections:
       connect-agent:
         title: Log in en roep een tool aan
         body: |
-          1. Sla de configuratie op als `.mcp.json` in de root van je projectmap en open die map
-             in VS Code.
-          2. Start een chat in agent mode. De server `learning-platform` laat zien dat hij
-             authenticatie nodig heeft. Kies **Authenticate** bij de acties van de server.
+          1. Kies je agent in het paneel hieronder. Sla de configuratie die het laat zien op in je
+             projectmap, onder de bestandsnaam die erbij staat.
+          2. Start (of herstart) je agent in die map. Hij ziet de server `learning-platform` en
+             merkt dat je moet inloggen; het paneel zegt waar je dat start.
           3. Je browser opent dit platform en vraagt je om toegang te geven. Log zo nodig in en
-             kies **Toestaan**. Ga terug naar VS Code zodra je het tabblad mag sluiten.
+             kies **Toestaan**. Ga terug naar je agent zodra de pagina zegt dat je hem mag sluiten.
           4. Vraag je agent: **"Gebruik het learning platform om mijn huidige stap te laten
              zien."**
 
@@ -190,16 +197,36 @@ sections:
       verify-config:
         title: Laat je agent de configuratie insturen
         body: |
-          Vraag je agent: **"Stuur mijn .mcp.json naar het learning platform voor stap
-          verify-config."** Die roept `report_task_result` aan met het bestand.
+          Vraag je agent: **"Stuur mijn MCP-configuratiebestand naar het learning platform voor
+          stap verify-config."** Die roept `report_task_result` aan met het bestand: `.mcp.json`,
+          `opencode.json`, `.cursor/mcp.json` of `.vscode/mcp.json`. Codex bewaart zijn
+          configuratie in je thuismap; laat hem het deel voor `learning-platform` insturen als
+          `.codex/config.toml`.
 
           Het platform controleert dat de server HTTP gebruikt, naar `/mcp` wijst en dat er geen
           credentials in het bestand staan. Commit je werk daarna.
         validation:
-          rules:
-            - { label: De server gebruikt het HTTP-transport }
-            - { label: De URL wijst naar het MCP-endpoint }
-            - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
+          variants:
+            - rules:
+                - { label: De server gebruikt het HTTP-transport }
+                - { label: De URL wijst naar het MCP-endpoint }
+                - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
+            - rules:
+                - { label: De server gebruikt het HTTP-transport }
+                - { label: De URL wijst naar het MCP-endpoint }
+                - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
+            - rules:
+                - { label: De server is een remote (HTTP-)server }
+                - { label: De URL wijst naar het MCP-endpoint }
+                - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
+            - rules:
+                - { label: De URL wijst naar het MCP-endpoint }
+                - { label: De server wordt via HTTP bereikt in plaats van als commando gestart }
+                - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
+            - rules:
+                - { label: De URL wijst naar het MCP-endpoint }
+                - { label: De server wordt via HTTP bereikt in plaats van als commando gestart }
+                - { label: Er staat geen token in het bestand; de agent logt in met OAuth }
   wrap-up:
     title: Afronden
     steps:

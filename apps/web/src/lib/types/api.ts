@@ -24,7 +24,15 @@ export interface User {
 	display_name: string;
 	role: UserRole;
 	locale: 'en' | 'nl';
-	created_at?: string;
+	created_at: string;
+	email_verified: boolean;
+	/** New address of an email change that still has to be confirmed. */
+	pending_email: string | null;
+}
+
+export interface EmailConfirmation {
+	purpose: 'verify_email' | 'change_email';
+	email: string;
 }
 
 export interface CourseSummary {
@@ -256,6 +264,34 @@ export interface AuthoringGuide {
 	rules: string[];
 	guide_markdown: string;
 	step_types: StepTypeInfo[];
+}
+
+export interface AdminUser {
+	id: string;
+	email: string;
+	display_name: string;
+	role: UserRole;
+	locale: 'en' | 'nl';
+	created_at: string;
+	email_verified_at: string | null;
+	last_sign_in_at: string | null;
+	sign_ins: number;
+	courses_started: number;
+	courses_completed: number;
+	theme_id: string | null;
+	agent_connected: boolean;
+}
+
+export interface AdminUsersResponse {
+	summary: {
+		total: number;
+		verified: number;
+		last_24_hours: number;
+		last_7_days: number;
+		last_30_days: number;
+		signups_per_day: { day: string; count: number }[];
+	};
+	users: Page<AdminUser>;
 }
 
 export interface TrafficReport {

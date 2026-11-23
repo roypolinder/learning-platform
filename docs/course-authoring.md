@@ -68,7 +68,7 @@ learners), `validation` (private), `depends_on`, `optional`, `completion: manual
 | `mcp_connection_check` | `server_name?` | `required_tool?` |
 | `http_endpoint_check` (run by the browser) | `path?`, `method?` (GET/HEAD) | `expect_status?`, `expect_json: {pointer: value}`, `body_contains?`, `max_latency_ms?` |
 | `filesystem_validation` | — | `files: [{path (glob), label?, min_length?, max_length?, contains?, frontmatter?: {required, max_length}}]` |
-| `configuration_validation` | `file`, `format` (json/yaml) | `rules: [{pointer (with * wildcards), equals?, contains?, one_of?, absent?, label?}]` (`absent: true` passes only if nothing matches) |
+| `configuration_validation` | `file`, `format` (json/yaml/toml); or `variants: [{file, format, label?}]` for alternatives such as each agent's MCP config (the first one submitted is checked) | `rules: [{pointer (with * wildcards), equals?, contains?, one_of?, absent?, label?}]` (`absent: true` passes only if nothing matches); with variants `variants: [{file, rules}]`, one per config variant |
 | `git_repository_check` | — | `branch?`, `min_commits?`, `commit_prefixes?`, `required_files?`, `require_clean?`, `require_remote?` |
 | `extension_validation` | depends on `extension` | depends on `extension` |
 | `external_task` | `instructions?` | needs `extension` or `completion: manual` |

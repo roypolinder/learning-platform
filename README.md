@@ -77,24 +77,24 @@ Any PostgreSQL ≥ 14 works; the app only needs `DATABASE_URL` (see `.env.exampl
 
 MariaDB, if installed, is not used or touched.
 
-## Connecting an agent (VS Code)
+## Connecting an agent
 
 The MCP endpoint is an OAuth 2.1 protected resource, so agents sign in through the browser
-instead of handling tokens. This works in VS Code's Copilot harness, which cannot forward
-`${input:…}` secrets.
+instead of handling tokens. Any agent that supports remote (Streamable HTTP) MCP servers with
+OAuth works; **Settings → Connected tools** and the MCP course show the configuration for
+Claude Code, VS Code (GitHub Copilot), OpenCode, Cursor and Codex. None of them contains a
+secret:
 
-1. Add the server to `.mcp.json` in the project root — no token, header or input prompt needed:
+| Agent | File | Sign in |
+| --- | --- | --- |
+| Claude Code | `.mcp.json`: `{"mcpServers": {"learning-platform": {"type": "http", "url": "http://localhost:8080/mcp"}}}` (or `claude mcp add --transport http --scope project learning-platform <url>`) | `/mcp` → learning-platform → Authenticate |
+| VS Code (Copilot) | `.mcp.json`: same, plus `"tools": ["*"]` | **Authenticate** when VS Code asks |
+| OpenCode | `opencode.json`: `{"mcp": {"learning-platform": {"type": "remote", "url": "<url>"}}}` | automatic, or `opencode mcp auth learning-platform` |
+| Cursor | `.cursor/mcp.json`: `{"mcpServers": {"learning-platform": {"url": "<url>"}}}` | Cursor Settings → MCP → Connect |
+| Codex | `~/.codex/config.toml`: `[mcp_servers.learning-platform]` with `url = "<url>"` | `codex mcp login learning-platform` |
 
-   ```json
-   {
-     "mcpServers": {
-       "learning-platform": { "type": "http", "url": "http://localhost:8080/mcp", "tools": ["*"] }
-     }
-   }
-   ```
-2. When VS Code shows the server needs authentication, choose **Authenticate**. The browser
-   opens the platform's consent page (sign in first if needed); select **Allow**.
-3. Ask the agent *"What is my current step on the learning platform?"*.
+The browser opens the platform's consent page (sign in first if needed); select **Allow**.
+Then ask the agent *"What is my current step on the learning platform?"*.
 
 Connections appear under **Settings → Connected tools**, where they can be revoked. Scripts
 and other clients without OAuth support can still use a personal token from
@@ -142,6 +142,16 @@ healthy. Optionally it configures ufw, daily `pg_dump` backups and unattended se
 updates. Re-runs keep existing config and secrets. `sudo learning-platform <command>` runs
 admin commands (e.g. `grant-super-admin`) with the production config. See
 `./setup.sh --help` for non-interactive use.
+
+Account emails (verify email, reset password, change email, account deleted) go through any
+SMTP provider: set `SMTP_URL` and `MAIL_FROM` in the configuration (setup.sh adds both, empty).
+Without `SMTP_URL` they are only written to the journal. Verify the sender domain with SPF and
+DKIM at the provider, and name the provider in `apps/web/src/routes/privacy/+page.svelte`
+(`mailProvider`), since it processes learners' email addresses. In development the emails and
+their links appear in the API log.
+
+Super admins see every account at `/admin/users`: sign-ups per day, verified or not, last
+sign-in and course activity, to spot automated sign-ups.
 
 Traffic statistics: Caddy's access log is rotated daily and deleted after 30 days. Every 15
 minutes GoAccess turns it into an HTML report (IPs shortened, query strings removed, crawlers

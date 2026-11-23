@@ -6,11 +6,14 @@
 	import Icon from '#lib/components/ui/Icon.svelte';
 	import Notice from '#lib/components/ui/Notice.svelte';
 	import { formatRelative } from '#lib/utils/format.ts';
+	import { agentChoice, agentSetups } from './agents.svelte.ts';
 	import { McpConnections } from './connection-state.svelte.ts';
 
 	let { compact = false }: { compact?: boolean } = $props();
 
 	const connections = new McpConnections();
+	const setups = $derived(agentSetups(connections.endpoint));
+	const setup = $derived(setups.find((candidate) => candidate.id === agentChoice.current) ?? setups[0]);
 
 	onMount(() => {
 		void connections.load();
@@ -48,17 +51,33 @@
 	<div class="flex flex-col gap-3 px-4 py-3">
 		{#if connections.error}<Notice tone="danger">{connections.error}</Notice>{/if}
 
-		{#if connections.config}
-			<CodeBlock
-				filename=".mcp.json"
-				language="json"
-				code={JSON.stringify(connections.config, null, 2)}
-				caption={t('mcp.config_caption')}
-			/>
+		<div class="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={t('mcp.choose_agent')}>
+			<span class="mr-1 text-[12px] text-fg-muted">{t('mcp.choose_agent')}</span>
+			{#each setups as option (option.id)}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={option.id === setup.id}
+					onclick={() => agentChoice.set(option.id)}
+					class="rounded-md border px-2.5 py-1 text-[12px] {option.id === setup.id
+						? 'border-accent bg-accent-soft font-medium text-fg'
+						: 'border-line-strong bg-surface text-fg-muted hover:border-fg-subtle hover:text-fg'}"
+				>
+					{option.name ?? t('mcp.other_agent')}
+				</button>
+			{/each}
+		</div>
+
+		{#if connections.endpoint}
+			<CodeBlock filename={setup.file} language={setup.language} code={setup.code} caption={t(setup.caption)} />
+			{#if setup.command}
+				<p class="text-[12px] text-fg-muted">{t('mcp.or_command')}</p>
+				<CodeBlock language="shell" code={setup.command} wrap />
+			{/if}
 		{/if}
 		<ol class="flex list-decimal flex-col gap-1 pl-5 text-[13px] text-fg-muted">
 			<li>{t('mcp.step_1')}</li>
-			<li>{t('mcp.step_2')}</li>
+			{#each setup.steps as step (step)}<li>{t(step)}</li>{/each}
 			<li>{t('mcp.step_3')}</li>
 		</ol>
 

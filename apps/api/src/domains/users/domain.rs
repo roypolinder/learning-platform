@@ -9,6 +9,9 @@ pub struct User {
     pub role: String,
     pub locale: String,
     pub created_at: DateTime<Utc>,
+    pub email_verified_at: Option<DateTime<Utc>>,
+    /// New address of an email change that is waiting for confirmation.
+    pub pending_email: Option<String>,
 }
 
 pub const ROLE_SUPER_ADMIN: &str = "super_admin";

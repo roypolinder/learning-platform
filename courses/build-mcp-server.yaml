@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: build-mcp-server
-version: 2.1.0
+version: 2.1.1
 title: Build your own MCP server
 summary: Expose the catalog of your site as MCP tools over Streamable HTTP, so any AI agent can search it — and let the platform connect to it as a client.
 description: |
@@ -186,7 +186,9 @@ sections:
         optional: true
         estimated_minutes: 5
         body: |
-          Add your server next to `learning-platform` in `.mcp.json`:
+          Add your server next to `learning-platform` in your agent's MCP configuration. In
+          `.mcp.json` (Claude Code, VS Code) that looks like this; other agents use the same
+          entry in their own format, as in the MCP course:
 
           ```json
           {

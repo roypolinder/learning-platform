@@ -132,7 +132,9 @@ sections:
       try-it:
         title: Probeer het met je eigen agent
         body: |
-          Zet je server naast `learning-platform` in `.mcp.json`:
+          Zet je server naast `learning-platform` in de MCP-configuratie van je agent. In
+          `.mcp.json` (Claude Code, VS Code) ziet dat er zo uit; andere agents gebruiken dezelfde
+          entry in hun eigen formaat, zoals in de MCP-cursus:
 
           ```json
           {

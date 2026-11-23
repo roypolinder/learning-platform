@@ -20,8 +20,8 @@ use tower_http::trace::TraceLayer;
 use crate::config::AppConfig;
 use crate::db;
 use crate::domains::{
-    auth, authoring, courses, extensions, integrations, learners, notes, oauth, progress, sessions,
-    traffic, users,
+    account, auth, authoring, courses, extensions, integrations, learners, notes, oauth, progress,
+    sessions, traffic, users,
 };
 use crate::error::ApiError;
 use crate::http::csrf;
@@ -38,6 +38,8 @@ pub enum StartupError {
     Registry(#[from] lp_course_engine::RegistryError),
     #[error(transparent)]
     Courses(#[from] courses::sync::SyncError),
+    #[error(transparent)]
+    Mail(#[from] crate::mail::MailError),
 }
 
 pub fn build_engine(config: &AppConfig) -> Result<CourseEngine, StartupError> {
@@ -63,6 +65,7 @@ pub async fn bootstrap_with_pool(
     pool: sqlx::PgPool,
 ) -> Result<AppState, StartupError> {
     db::migrate(&pool).await?;
+    let mailer = crate::mail::from_config(&config)?;
     let promoted =
         users::repository::promote_super_admins(&pool, &config.super_admin_emails).await?;
     if promoted > 0 {
@@ -79,12 +82,13 @@ pub async fn bootstrap_with_pool(
         config.mutable_course_versions,
     )
     .await?;
-    Ok(AppState::new(config, pool, engine, catalog, themes))
+    Ok(AppState::new(config, pool, engine, catalog, themes, mailer))
 }
 
 pub fn router(state: AppState, shutdown: CancellationToken) -> Router {
     let api = Router::new()
         .merge(auth::routes())
+        .merge(account::routes())
         .merge(users::routes())
         .merge(courses::routes())
         .merge(sessions::routes())

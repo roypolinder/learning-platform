@@ -11,6 +11,9 @@
 
 <AuthLayout title={t('auth.login_title')} subtitle={t('auth.login_subtitle')}>
 	<AuthForm mode="login" />
+	<p class="mt-3 text-right text-[13px]">
+		<a href="/forgot-password" class="text-fg-muted hover:text-fg hover:underline">{t('auth.forgot_password')}</a>
+	</p>
 	{#snippet footer()}
 		{t('auth.new_here')} <a href={next ? `/register?next=${encodeURIComponent(next)}` : '/register'} class="font-medium text-fg hover:underline">{t('auth.create_account')}</a>
 	{/snippet}

@@ -5,7 +5,6 @@ import type { IntegrationConnection } from '#lib/types/api.ts';
 export class McpConnections {
 	connections = $state<IntegrationConnection[]>([]);
 	endpoint = $state('');
-	config = $state<unknown>(null);
 	loading = $state(true);
 	busy = $state(false);
 	error = $state<string | null>(null);
@@ -18,7 +17,6 @@ export class McpConnections {
 			const response = await integrationsApi.list();
 			this.connections = response.connections;
 			this.endpoint = response.mcp_endpoint;
-			this.config = response.mcp_config;
 		} catch (error) {
 			this.error = error instanceof ApiError ? error.message : 'Could not load connections.';
 		} finally {

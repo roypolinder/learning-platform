@@ -105,8 +105,9 @@ sections:
         body: |
           Je hebt vier dingen nodig. Sla over wat je al hebt.
 
-          1. **Een code-editor met een AI coding agent.** De cursussen gebruiken VS Code met
-             GitHub Copilot in agent mode, maar elke agent die MCP ondersteunt werkt.
+          1. **Een AI coding agent.** Elke agent die MCP ondersteunt werkt, bijvoorbeeld Claude
+             Code, VS Code met GitHub Copilot in agent mode, Cursor, OpenCode of Codex. De
+             MCP-cursus laat voor elk van hen zien hoe je hem koppelt.
           2. **Node.js (LTS-versie)** via nodejs.org. Controleer in een terminal met
              `node --version` en `npm --version`. Koos je een andere taal? Installeer dan die
              runtime, bijvoorbeeld Python 3.12+.

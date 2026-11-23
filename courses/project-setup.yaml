@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: project-setup
-version: 1.0.0
+version: 1.0.1
 title: Start your project
 summary: Choose the website you will build throughout the track, set up an empty project and get your tools ready.
 description: |
@@ -137,8 +137,9 @@ sections:
         body: |
           You need four things. Skip whatever you already have.
 
-          1. **A code editor with an AI coding agent.** The courses use VS Code with GitHub
-             Copilot in agent mode, but any agent that supports MCP works.
+          1. **An AI coding agent.** Any agent that supports MCP works, for example Claude Code,
+             VS Code with GitHub Copilot in agent mode, Cursor, OpenCode or Codex. The MCP course
+             shows the setup for each of them.
           2. **Node.js (LTS version)** from nodejs.org. Check it in a terminal with
              `node --version` and `npm --version`. Did you choose another language? Install its
              runtime instead, for example Python 3.12+.

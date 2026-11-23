@@ -23,6 +23,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "serd
 dotenvy = "0.15"
 getrandom = "0.4"
 http = "1"
+lettre = { version = "0.11", default-features = false, features = ["builder", "hostname", "pool", "smtp-transport", "tokio1-rustls-tls"] }
 rmcp = { version = "3.10", default-features = false, features = ["server", "macros", "schemars", "transport-streamable-http-server"] }
 serde.workspace = true
 serde_json.workspace = true

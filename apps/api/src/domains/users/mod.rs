@@ -1,3 +1,4 @@
+mod admin;
 pub mod domain;
 pub mod dto;
 mod handlers;
@@ -12,4 +13,5 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users/me", get(handlers::me).patch(handlers::update_me))
         .route("/auth/session", get(handlers::session))
+        .route("/admin/users", get(admin::list))
 }

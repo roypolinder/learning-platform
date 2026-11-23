@@ -4,6 +4,9 @@
 	import Icon, { isIconName } from '#lib/components/ui/Icon.svelte';
 	import Notice from '#lib/components/ui/Notice.svelte';
 	import TextField from '#lib/components/ui/TextField.svelte';
+	import DeleteAccount from '#lib/features/account/DeleteAccount.svelte';
+	import EmailSettings from '#lib/features/account/EmailSettings.svelte';
+	import PasswordSettings from '#lib/features/account/PasswordSettings.svelte';
 	import McpSetup from '#lib/features/integrations/McpSetup.svelte';
 	import { i18n, locales, t, type Locale } from '#lib/i18n/index.svelte.ts';
 	import { ApiError } from '#lib/services/api/client.ts';
@@ -78,10 +81,25 @@
 			</div>
 			<form class="flex max-w-sm flex-col gap-4" onsubmit={save}>
 				<TextField label={t('settings.display_name')} bind:value={displayName} maxlength={80} />
-				<TextField label={t('auth.email')} value={auth.user.email} disabled hint={t('settings.email_hint')} />
 				{#if message}<Notice tone={message.tone}>{message.text}</Notice>{/if}
 				<div><Button type="submit" variant="primary" loading={saving}>{t('settings.save')}</Button></div>
 			</form>
+		</section>
+
+		<section class="mt-8 grid gap-6 border-b border-line pb-8 md:grid-cols-[200px_1fr]">
+			<div>
+				<h2 class="text-[14px] font-medium">{t('settings.email')}</h2>
+				<p class="mt-1 text-[13px] text-fg-muted">{t('settings.email_body')}</p>
+			</div>
+			<EmailSettings user={auth.user} />
+		</section>
+
+		<section class="mt-8 grid gap-6 border-b border-line pb-8 md:grid-cols-[200px_1fr]">
+			<div>
+				<h2 class="text-[14px] font-medium">{t('settings.password')}</h2>
+				<p class="mt-1 text-[13px] text-fg-muted">{t('settings.password_body')}</p>
+			</div>
+			<PasswordSettings />
 		</section>
 
 		<section class="mt-8 grid gap-6 border-b border-line pb-8 md:grid-cols-[200px_1fr]">
@@ -133,12 +151,20 @@
 			{/if}
 		</section>
 
-		<section class="mt-8 grid gap-6 md:grid-cols-[200px_1fr]">
+		<section class="mt-8 grid gap-6 border-b border-line pb-8 md:grid-cols-[200px_1fr]">
 			<div>
 				<h2 class="text-[14px] font-medium">{t('settings.tools')}</h2>
 				<p class="mt-1 text-[13px] text-fg-muted">{t('settings.tools_body')}</p>
 			</div>
 			<McpSetup />
+		</section>
+
+		<section class="mt-8 grid gap-6 md:grid-cols-[200px_1fr]">
+			<div>
+				<h2 class="text-[14px] font-medium text-danger">{t('settings.delete')}</h2>
+				<p class="mt-1 text-[13px] text-fg-muted">{t('settings.delete_body')}</p>
+			</div>
+			<DeleteAccount />
 		</section>
 	{/if}
 </div>

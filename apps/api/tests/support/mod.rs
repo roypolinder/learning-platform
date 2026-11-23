@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use lp_api::app;
 use lp_api::config::AppConfig;
+use lp_api::mail::MemoryMailer;
 use reqwest::{Client, Response, StatusCode};
 use serde_json::{Value, json};
 use sqlx::postgres::PgPoolOptions;
@@ -19,6 +20,8 @@ pub struct TestApp {
     admin_url: String,
     database: String,
     shutdown: CancellationToken,
+    /// Every email the app sent.
+    pub mail: MemoryMailer,
 }
 
 impl TestApp {
@@ -62,10 +65,14 @@ impl TestApp {
             database_max_connections: 5,
             super_admin_emails: Vec::new(),
             traffic_report_path,
+            smtp_url: None,
+            mail_from: "Learning Platform <no-reply@example.com>".into(),
         };
-        let state = app::bootstrap_with_pool(config, pool)
+        let mut state = app::bootstrap_with_pool(config, pool)
             .await
             .expect("bootstrap");
+        let mail = MemoryMailer::default();
+        state.mailer = std::sync::Arc::new(mail.clone());
         let shutdown = CancellationToken::new();
         let router = app::router(state, shutdown.clone());
         let stop = shutdown.clone();
@@ -85,7 +92,39 @@ impl TestApp {
             admin_url,
             database,
             shutdown,
+            mail,
         }
+    }
+
+    /// Waits for an email to `to` whose body links to `page`, and returns the link's token.
+    /// Emails are sent in the background, so they may arrive just after the response.
+    pub async fn emailed_token(&self, to: &str, page: &str) -> String {
+        let marker = format!("/{page}#token=");
+        for _ in 0..50 {
+            let token = self.mail.sent().iter().rev().find_map(|email| {
+                (email.to == to)
+                    .then(|| email.body.split_once(&marker))
+                    .flatten()
+                    .map(|(_, rest)| rest.split_whitespace().next().unwrap_or("").to_owned())
+            });
+            if let Some(token) = token {
+                return token;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        panic!(
+            "no email to {to} linking to /{page}; sent: {:?}",
+            self.mail.sent()
+        );
+    }
+
+    /// Number of emails sent to `to` so far.
+    pub fn emails_to(&self, to: &str) -> usize {
+        self.mail
+            .sent()
+            .iter()
+            .filter(|email| email.to == to)
+            .count()
     }
 
     pub fn url(&self, path: &str) -> String {
@@ -123,6 +162,7 @@ impl TestApp {
         TestUser {
             client,
             cookie,
+            email: format!("{name}@example.com"),
             base: self.base.clone(),
         }
     }
@@ -144,6 +184,7 @@ impl TestApp {
 pub struct TestUser {
     pub client: Client,
     pub cookie: String,
+    pub email: String,
     base: String,
 }
 
@@ -200,6 +241,27 @@ impl TestUser {
         assert!(status.is_success(), "POST {path}: {status} {body}");
         body
     }
+}
+
+/// Signs in with email and password and returns the session cookie, or the failure status.
+pub async fn sign_in(app: &TestApp, email: &str, password: &str) -> Result<String, StatusCode> {
+    let response = Client::new()
+        .post(app.url("/api/v1/auth/login"))
+        .header("x-requested-with", "lp-web")
+        .json(&json!({ "email": email, "password": password }))
+        .send()
+        .await
+        .unwrap();
+    if !response.status().is_success() {
+        return Err(response.status());
+    }
+    Ok(response
+        .headers()
+        .get("set-cookie")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(';').next())
+        .unwrap()
+        .to_owned())
 }
 
 pub fn step_status(progress: &Value, step_id: &str) -> String {

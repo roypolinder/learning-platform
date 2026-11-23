@@ -4,6 +4,8 @@
 	// Operators of their own instance: change these to match your deployment.
 	const contact = 'info@polinderit.nl';
 	const hostingProvider = 'TransIP';
+	// Company behind SMTP_URL, e.g. 'Brevo' or 'Postmark'. Name it once you have chosen one.
+	const mailProvider: string | null = 'TransIP';
 	const backupRetentionDays = 14; // BACKUP_RETENTION_DAYS in setup.sh
 	const logRetentionDays = 30; // ACCESS_LOG_RETENTION_DAYS in setup.sh
 	const sessionDays = 14;
@@ -44,9 +46,21 @@
 					</thead>
 					<tbody class="align-top [&_td]:border-b [&_td]:border-line [&_td]:py-2 [&_td]:pr-4">
 						<tr>
-							<td>Account: email, display name, password hash, role</td>
+							<td>Account: email, display name, password hash, role, language, whether and when you confirmed your email address</td>
 							<td>Creating and running your account</td>
 							<td>Contract (Art. 6(1)(b))</td>
+							<td>While your account exists</td>
+						</tr>
+						<tr>
+							<td>Account emails: the address a link was sent to, a hash of the link (never the link itself), when it expires and whether it was used</td>
+							<td>Confirming your email address, resetting your password, changing your email address, and telling you about changes to your account</td>
+							<td>Contract (Art. 6(1)(b))</td>
+							<td>While your account exists. Links stop working after 1 to 48 hours.</td>
+						</tr>
+						<tr>
+							<td>Account overview for administrators: email, display name, sign-up and sign-in times, number of courses started</td>
+							<td>Spotting fake and automated sign-ups</td>
+							<td>Legitimate interest (Art. 6(1)(f))</td>
 							<td>While your account exists</td>
 						</tr>
 						<tr>
@@ -125,29 +139,41 @@
 		<section>
 			<h2>Who else receives your data</h2>
 			<p>
-				We do not sell your data or share it for marketing, and we use no third-party analytics or advertising services. The only external party
-				involved is the hosting provider, {hostingProvider}, which rents us the virtual server that holds the database, logs and backups. It acts as a
-				processor: it hosts the data on our behalf. Beyond this, the platform has no other processors.
+				We do not sell your data or share it for marketing, and we use no third-party analytics or advertising services.
+				{#if mailProvider === hostingProvider}
+					The only external party involved is {hostingProvider}, which acts as a processor on our behalf: it rents us the virtual server that holds
+					the database, logs and backups, and it delivers account emails, so it also receives your email address, display name and the text of
+					those emails.
+				{:else}
+					Two external parties act as processors on our behalf: the hosting provider, {hostingProvider}, which rents us the virtual server that holds
+					the database, logs and backups; and {mailProvider ?? 'an email delivery provider'}, which delivers account emails and so receives your email
+					address, display name and the text of those emails.
+				{/if}
+				We only send account emails, never newsletters or marketing. Beyond this, the platform has no other processors.
 			</p>
 		</section>
 
 		<section>
 			<h2>Where your data is stored</h2>
 			<p>
-				All data, including backups, is stored on that one server. The platform itself does not copy it elsewhere or send it to other countries.
-				Transfers outside the European Economic Area can only happen through an AI agent you connect, as described above.
+				All data, including backups, is stored on that one server. Apart from account emails, which pass through the email delivery provider, the
+				platform does not copy it elsewhere or send it to other countries. Transfers outside the European Economic Area can only happen through an
+				AI agent you connect, as described above.
 			</p>
 		</section>
 
 		<section>
 			<h2>Deleting your account</h2>
 			<p>
-				The platform has no delete button yet. To delete your account, email
-				<a href="mailto:{contact}" class="font-medium text-fg hover:underline">{contact}</a>; we handle the request within one month. When your
-				account is deleted:
+				You can delete your account yourself under <a href="/settings" class="font-medium text-fg hover:underline">Settings</a>; you confirm it with
+				your password. You can also email <a href="mailto:{contact}" class="font-medium text-fg hover:underline">{contact}</a>; we handle the
+				request within one month. When your account is deleted:
 			</p>
 			<ul class="mt-2 list-disc pl-5">
-				<li>Your account, progress, activity log and AI agent connections are removed from the live database, and connected agents lose access.</li>
+				<li>
+					Your account, progress, notes, project, email links and AI agent connections are removed from the live database right away, and
+					connected agents lose access. We send one last email to confirm the deletion.
+				</li>
 				<li>Server logs containing your IP address are removed when they reach the {logRetentionDays}-day limit.</li>
 				<li>Backups are not edited, so they still contain your data until they expire after {backupRetentionDays} days.</li>
 				<li>Course versions you authored stay available, but are no longer linked to your account.</li>

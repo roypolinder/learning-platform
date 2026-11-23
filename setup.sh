@@ -443,7 +443,8 @@ SQL
 
 write_config() {
 	step "Writing the configuration"
-	local cookie_secure=false hosts="localhost,127.0.0.1,::1"
+	local cookie_secure=false hosts="localhost,127.0.0.1,::1" mail_from
+	mail_from="Learning Platform <no-reply@${DOMAIN:-localhost}>"
 	local traffic_setting="# The traffic report for super admins is disabled (setup.sh --reconfigure enables it)."
 	[[ -n $DOMAIN ]] && cookie_secure=true
 	if [[ $ENABLE_TRAFFIC_REPORT == yes ]]; then
@@ -478,6 +479,14 @@ SUPER_ADMIN_EMAILS=$ADMIN_EMAIL
 
 $traffic_setting
 
+# Account emails (verify email, reset password, change email). Any SMTP provider works:
+#   smtps://USER:PASSWORD@smtp.example.com:465            (implicit TLS)
+#   smtp://USER:PASSWORD@smtp.example.com:587?tls=required (STARTTLS)
+# URL-encode special characters in the password. Empty: emails only go to the journal.
+SMTP_URL=
+# Sender; the provider must allow this address (verify the domain with SPF and DKIM).
+MAIL_FROM=$mail_from
+
 COOKIE_SECURE=$cookie_secure
 # Published course versions are immutable: bump "version" when you change a course file.
 MUTABLE_COURSE_VERSIONS=false
@@ -495,6 +504,8 @@ EOF
 		ensure_env_value MCP_ALLOWED_HOSTS "$hosts"
 		ensure_env_value TRUST_PROXY_HEADERS true
 		ensure_env_value SUPER_ADMIN_EMAILS "$ADMIN_EMAIL"
+		ensure_env_value SMTP_URL ""
+		ensure_env_value MAIL_FROM "$mail_from"
 		ensure_env_value COOKIE_SECURE "$cookie_secure"
 		ensure_env_value MUTABLE_COURSE_VERSIONS false
 		if [[ $ENABLE_TRAFFIC_REPORT == yes ]]; then ensure_env_value TRAFFIC_REPORT_PATH "$TRAFFIC_REPORT"; fi
@@ -511,10 +522,10 @@ EOF
 	chmod 640 "$ENV_FILE"
 
 	if ! $ASSUME_YES; then
-		printf '\n%s%s%s\n' "$DIM" "$(sed -E 's/(DATABASE_URL=postgres:\/\/[^:]+:)[^@]+@/\1••••••@/' "$ENV_FILE")" "$RESET"
+		printf '\n%s%s%s\n' "$DIM" "$(sed -E 's/((DATABASE|SMTP)_URL=[a-z]+:\/\/[^:]+:)[^@]+@/\1••••••@/' "$ENV_FILE")" "$RESET"
 		echo
-		info "Review the configuration above. Common edits: SUPER_ADMIN_EMAILS (comma-separated),"
-		info "DATABASE_MAX_CONNECTIONS, RUST_LOG."
+		info "Review the configuration above. Common edits: SMTP_URL and MAIL_FROM (account emails),"
+		info "SUPER_ADMIN_EMAILS (comma-separated), DATABASE_MAX_CONNECTIONS, RUST_LOG."
 		if confirm "Open it in an editor now?" n; then
 			"${EDITOR:-nano}" "$ENV_FILE" </dev/tty >/dev/tty
 		fi
@@ -528,6 +539,8 @@ validate_config() {
 		[[ -n $(env_value "$key") ]] || missing+=("$key")
 	done
 	((${#missing[@]} == 0)) || die "Missing settings in $ENV_FILE: ${missing[*]}"
+	[[ -n $(env_value SMTP_URL) ]] ||
+		warn "SMTP_URL is empty: learners get no verification or password-reset emails until you set it in $ENV_FILE."
 	[[ $(env_value PUBLIC_BASE_URL) =~ ^https?://[^/]+$ ]] || die "PUBLIC_BASE_URL must look like https://example.com (no trailing slash or path)."
 	if [[ $(env_value COOKIE_SECURE) == true && $(env_value PUBLIC_BASE_URL) == http://* ]]; then
 		die "COOKIE_SECURE=true needs an https:// PUBLIC_BASE_URL, otherwise nobody can sign in."

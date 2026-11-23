@@ -12,6 +12,7 @@ async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-saphyr = "2"
+toml = { version = "1", default-features = false, features = ["parse", "serde"] }
 url = "2"
 
 [dev-dependencies]

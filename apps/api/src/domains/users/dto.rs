@@ -5,7 +5,6 @@ use uuid::Uuid;
 use lp_course_engine::Locale;
 
 use super::domain::User;
-use crate::http::auth::CurrentUser;
 
 #[derive(Debug, Serialize)]
 pub struct UserDto {
@@ -14,8 +13,9 @@ pub struct UserDto {
     pub display_name: String,
     pub role: String,
     pub locale: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub created_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub email_verified: bool,
+    pub pending_email: Option<String>,
 }
 
 impl From<User> for UserDto {
@@ -26,20 +26,9 @@ impl From<User> for UserDto {
             display_name: user.display_name,
             role: user.role,
             locale: user.locale,
-            created_at: Some(user.created_at),
-        }
-    }
-}
-
-impl From<&CurrentUser> for UserDto {
-    fn from(user: &CurrentUser) -> Self {
-        Self {
-            id: user.id,
-            email: user.email.clone(),
-            display_name: user.display_name.clone(),
-            role: user.role.clone(),
-            locale: user.locale.clone(),
-            created_at: None,
+            created_at: user.created_at,
+            email_verified: user.email_verified_at.is_some(),
+            pending_email: user.pending_email,
         }
     }
 }

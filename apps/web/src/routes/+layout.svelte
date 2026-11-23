@@ -9,7 +9,7 @@
 
 	let { children }: LayoutProps = $props();
 	// Pages with their own chrome: the landing pages and the sign-in flow.
-	const standalone = ['/', '/nl/', '/login', '/register', '/connect/authorize'];
+	const standalone = ['/', '/nl/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/connect/authorize'];
 
 	onMount(() => {
 		void auth.load();

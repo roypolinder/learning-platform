@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: agent-skill-basics
-version: 2.0.0
+version: 2.0.1
 title: Teach your agent with skills
 summary: Write a skill that teaches your coding agent the conventions of your project, so it helps the same way in every course.
 description: |
@@ -12,7 +12,7 @@ category: AI agents
 difficulty: beginner
 order: 3
 estimated_minutes: 30
-tags: [skills, agents, copilot]
+tags: [skills, agents, claude-code, copilot]
 objectives:
   - Describe how agents discover and load skills
   - Write a precise skill description that triggers at the right time
@@ -46,7 +46,7 @@ shared_sections:
         title: Confirm your agent is connected
         body: |
           This course asks your agent to submit files. Make sure the `learning-platform` server
-          from the MCP course is running (choose **Authenticate** if VS Code says it needs
+          from the MCP course is running (sign in again if your agent says it needs
           authentication), then ask your agent: **"What is my current step on the learning platform?"**
         config:
           server_name: learning-platform
@@ -61,7 +61,9 @@ sections:
         estimated_minutes: 4
         body: |
           A skill is a directory containing a `SKILL.md` file and, optionally, scripts or reference
-          files. In VS Code they live in `.github/skills/<skill-name>/`.
+          files. Where they live depends on your agent: Claude Code and OpenCode read
+          `.claude/skills/<skill-name>/`, VS Code with GitHub Copilot reads
+          `.github/skills/<skill-name>/`. Other agents document their own folder.
 
           Agents don't read every skill up front. At startup they only see each skill's **name and
           description** from the YAML frontmatter. When a request matches a description, the agent
@@ -159,7 +161,8 @@ sections:
         title: Write the skill with your agent
         estimated_minutes: 12
         body: |
-          Write a skill named `site-conventions` in `.github/skills/site-conventions/SKILL.md`. Ask
+          Write a skill named `site-conventions` in your agent's skills folder, for example
+          `.claude/skills/site-conventions/SKILL.md` or `.github/skills/site-conventions/SKILL.md`. Ask
           your agent to help, but decide the content yourself. A good conventions skill for
           {{theme.data.site.name}} covers:
 

@@ -18,7 +18,7 @@ lp-core  ◄──  lp-course-engine
 - **`lp-extensions`** — integrations implementing the contract. They depend only on
   `lp-core`, so neither engine nor extensions know about each other's internals.
 - **`lp-api`** — HTTP, persistence, auth, MCP. Organized by domain
-  (`auth`, `users`, `courses`, `sessions`, `progress`, `extensions`, `integrations`), each with
+  (`auth`, `account`, `users`, `courses`, `sessions`, `progress`, `extensions`, `integrations`), each with
   `domain` / `dto` / `repository` / `service` / `handlers` as needed. Handlers are thin;
   services own orchestration; repositories own SQL.
 
@@ -109,7 +109,8 @@ out-of-process or sandboxed implementation can sit behind the same interface lat
 ## OAuth for MCP clients
 
 `domains::oauth` is a small OAuth 2.1 authorization server following the MCP authorization
-spec, so clients such as VS Code's Copilot harness can sign in without pasted secrets:
+spec, so clients such as Claude Code, VS Code's Copilot harness, OpenCode, Cursor and Codex can
+sign in without pasted secrets:
 
 - Discovery: `/.well-known/oauth-protected-resource[/mcp]` (RFC 9728) and
   `/.well-known/oauth-authorization-server` (RFC 8414). Issuer and resource are derived from
@@ -156,6 +157,16 @@ Learner services must allow CORS from the platform origin; the step page shows t
 
 - Passwords: Argon2id; constant-time-ish login to avoid account enumeration.
 - Browser sessions: random token in an `HttpOnly; SameSite=Lax` cookie, SHA-256 stored.
+- Account emails (`domains::account`, `mail`): single-use links whose SHA-256 is stored in
+  `email_tokens` with the address they were sent to; the secret travels in the URL fragment so
+  it never reaches access logs. Reset links live 1 hour, change links 24 hours, verification
+  links 48 hours. A link stops working once the account's address changes. Mail goes out in the
+  background through SMTP (`lettre`), rate limited per recipient; "forgot password" answers the
+  same for unknown addresses.
+- Sensitive account changes (email, password, deletion) need the current password again, rate
+  limited per account. Deletion acts only on the signed-in user (no endpoint takes a user id),
+  cascades to everything the user owns, and refuses to remove the last super admin. A password
+  reset signs out every browser session; a password change every other one.
 - CSRF: state-changing cookie requests must carry `x-requested-with`; no CORS is granted.
 - Authorization: every session query is scoped by `user_id`; other users' sessions → 404.
 - Learner-service checks run in the browser; the server only validates submitted responses
@@ -171,6 +182,9 @@ Versioned under `/api/v1`; errors are `{"error": {"code", "message", "details?"}
 
 ```
 POST /auth/register | /auth/login | /auth/logout      GET|PATCH /users/me
+POST /auth/password/forgot | /auth/password/reset | /auth/email/confirm
+POST /users/me/email | /users/me/email/verification | /users/me/password | /users/me/delete
+DELETE /users/me/email/pending                         GET /admin/users?q&status&page (super admin)
 GET  /courses?q&category&difficulty&page&per_page    GET /courses/{id}
 POST /courses/{id}/sessions                            GET /sessions?status&page
 GET  /sessions/{id} | /progress | /events | /stream    POST /sessions/{id}/refresh

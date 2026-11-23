@@ -1,7 +1,9 @@
 use chrono::{Duration, Utc};
+use uuid::Uuid;
 
 use super::dto::{LoginRequest, RegisterRequest};
 use super::repository;
+use crate::domains::account::service as account;
 use crate::domains::users::domain::{User, is_plausible_email, normalize_email};
 use crate::domains::users::repository as users;
 use crate::error::{ApiError, ApiResult, FieldError};
@@ -32,21 +34,12 @@ pub async fn register(state: &AppState, request: RegisterRequest) -> ApiResult<I
             "must be between 1 and 80 characters",
         ));
     }
-    if request.password.chars().count() < MIN_PASSWORD_LENGTH || request.password.len() > 512 {
-        problems.push(FieldError::new(
-            "password",
-            format!("must be at least {MIN_PASSWORD_LENGTH} characters"),
-        ));
-    }
+    problems.extend(password_problem("password", &request.password));
     if !problems.is_empty() {
         return Err(ApiError::Validation(problems));
     }
 
-    let password = request.password;
-    let password_hash = tokio::task::spawn_blocking(move || hash_password(&password))
-        .await
-        .map_err(ApiError::internal)?
-        .map_err(ApiError::internal)?;
+    let password_hash = hash_password_blocking(request.password).await?;
     let user = users::insert(
         &state.db,
         &email,
@@ -59,7 +52,49 @@ pub async fn register(state: &AppState, request: RegisterRequest) -> ApiResult<I
         code: "email_taken",
         message: "An account with this email already exists.".into(),
     })?;
+    if let Err(error) = account::send_verification(state, &user).await {
+        tracing::warn!(%error, "verification email not queued");
+    }
     issue_session(state, user).await
+}
+
+/// `None` when the password is acceptable for a new account.
+pub fn password_problem(field: &'static str, password: &str) -> Option<FieldError> {
+    (password.chars().count() < MIN_PASSWORD_LENGTH || password.len() > 512).then(|| {
+        FieldError::new(
+            field,
+            format!("must be at least {MIN_PASSWORD_LENGTH} characters"),
+        )
+    })
+}
+
+pub async fn hash_password_blocking(password: String) -> ApiResult<String> {
+    tokio::task::spawn_blocking(move || hash_password(&password))
+        .await
+        .map_err(ApiError::internal)?
+        .map_err(ApiError::internal)
+}
+
+/// Checks the account password again before sensitive changes. Wrong guesses are rate limited
+/// per account, so a stolen session cannot be used to brute-force the password.
+pub async fn confirm_password(state: &AppState, user_id: Uuid, password: String) -> ApiResult<()> {
+    state
+        .auth_limiter
+        .check(&format!("confirm-password:{user_id}"))?;
+    let hash = users::find_password_hash(&state.db, user_id)
+        .await?
+        .ok_or(ApiError::Unauthorized)?;
+    let valid = tokio::task::spawn_blocking(move || verify_password(&password, &hash))
+        .await
+        .map_err(ApiError::internal)?;
+    if valid {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest {
+            code: "invalid_password",
+            message: "The password is incorrect.".into(),
+        })
+    }
 }
 
 pub async fn login(state: &AppState, request: LoginRequest) -> ApiResult<IssuedSession> {

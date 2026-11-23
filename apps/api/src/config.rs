@@ -23,6 +23,27 @@ pub struct AppConfig {
     pub super_admin_emails: Vec<String>,
     /// HTML traffic report generated from the reverse proxy's access log; shown to super admins.
     pub traffic_report_path: Option<PathBuf>,
+    /// SMTP server for account emails, e.g. `smtps://user:password@smtp.example.com:465`.
+    /// Without one, emails are written to the log (development).
+    pub smtp_url: Option<Secret>,
+    /// Sender of account emails, e.g. `Learning Platform <no-reply@example.com>`.
+    pub mail_from: String,
+}
+
+/// A value that may contain credentials; kept out of `Debug` output and logs.
+#[derive(Clone)]
+pub struct Secret(pub String);
+
+impl Secret {
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Secret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Secret(***)")
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -97,6 +118,9 @@ impl AppConfig {
                 })
                 .unwrap_or_default(),
             traffic_report_path: optional("TRAFFIC_REPORT_PATH").map(PathBuf::from),
+            smtp_url: optional("SMTP_URL").map(Secret),
+            mail_from: optional("MAIL_FROM")
+                .unwrap_or_else(|| "Learning Platform <no-reply@localhost>".into()),
         })
     }
 }
@@ -118,6 +142,8 @@ impl AppConfig {
             database_max_connections: 1,
             super_admin_emails: Vec::new(),
             traffic_report_path: None,
+            smtp_url: None,
+            mail_from: "Learning Platform <no-reply@localhost>".into(),
         }
     }
 }

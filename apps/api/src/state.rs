@@ -8,6 +8,7 @@ use sqlx::PgPool;
 use crate::config::AppConfig;
 use crate::domains::courses::catalog::CourseCatalog;
 use crate::http::rate_limit::RateLimiter;
+use crate::mail::Mailer;
 use crate::realtime::SessionHub;
 
 #[derive(Clone)]
@@ -20,6 +21,9 @@ pub struct AppState {
     pub hub: SessionHub,
     pub auth_limiter: RateLimiter,
     pub mcp_limiter: RateLimiter,
+    /// Emails per recipient or account, so nobody can flood an inbox.
+    pub mail_limiter: RateLimiter,
+    pub mailer: Arc<dyn Mailer>,
 }
 
 impl AppState {
@@ -29,6 +33,7 @@ impl AppState {
         engine: Arc<CourseEngine>,
         catalog: CourseCatalog,
         themes: ThemeCatalog,
+        mailer: Arc<dyn Mailer>,
     ) -> Self {
         Self {
             config: Arc::new(config),
@@ -39,6 +44,8 @@ impl AppState {
             hub: SessionHub::new(1024),
             auth_limiter: RateLimiter::new(20, Duration::from_secs(60)),
             mcp_limiter: RateLimiter::new(240, Duration::from_secs(60)),
+            mail_limiter: RateLimiter::new(5, Duration::from_secs(60 * 60)),
+            mailer,
         }
     }
 }

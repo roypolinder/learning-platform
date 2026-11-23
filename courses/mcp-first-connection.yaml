@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=./schema/course.schema.json
 id: mcp-first-connection
-version: 3.1.0
+version: 3.2.0
 title: Connect your AI agent over MCP
 summary: Learn how the Model Context Protocol works, connect your coding agent to the platform and let it fetch your project's seed data.
 description: |
@@ -15,7 +15,7 @@ category: AI tooling
 difficulty: beginner
 order: 2
 estimated_minutes: 30
-tags: [mcp, agents, vs-code]
+tags: [mcp, agents, claude-code, vs-code, opencode, cursor, codex]
 objectives:
   - Explain what MCP hosts, clients and servers are responsible for
   - Distinguish tools, resources and prompts
@@ -28,7 +28,7 @@ glossary:
   - term: MCP
     definition: Model Context Protocol. The open standard that lets AI agents use tools and data from other programs.
   - term: Host
-    definition: The application you work in, such as VS Code. It starts one MCP client per server.
+    definition: The application you work in, such as Claude Code, VS Code, Cursor or OpenCode. It starts one MCP client per server.
   - term: MCP client
     definition: The connector inside the host that keeps a session with one MCP server.
   - term: MCP server
@@ -92,8 +92,8 @@ sections:
           responsible for.
         config:
           nodes:
-            - { id: you, label: You, kind: person, row: 0, col: 0, detail: "You ask your agent something in the chat of your editor." }
-            - { id: host, label: "VS Code (host)", kind: app, row: 0, col: 1, detail: "The **host** is the application you work in. It runs the model conversation and starts one MCP client per configured server." }
+            - { id: you, label: You, kind: person, row: 0, col: 0, detail: "You ask your agent something, in the chat of your editor or in the terminal." }
+            - { id: host, label: "Your agent (host)", kind: app, row: 0, col: 1, detail: "The **host** is the application you work in, such as Claude Code, VS Code, Cursor or OpenCode. It runs the model conversation and starts one MCP client per configured server." }
             - { id: client, label: MCP client, kind: tool, row: 0, col: 2, detail: "The **client** keeps the session with one server: it signs in, lists the tools and sends the calls the model wants to make." }
             - { id: server, label: "Learning platform (server)", kind: app, row: 1, col: 2, detail: "The **server** offers tools such as `get_project` and `get_current_step`, and decides what each caller may see." }
             - { id: model, label: Language model, kind: model, row: 1, col: 1, detail: "The model only *proposes* tool calls. The host and client execute them." }
@@ -140,7 +140,7 @@ sections:
             - { from: host, to: client }
             - { from: client, to: server, label: JSON-RPC }
           chips:
-            - { id: host, label: Host (your editor) }
+            - { id: host, label: Host (your agent) }
             - { id: client, label: MCP client }
             - { id: server, label: MCP server (the platform) }
             - { id: resource, label: Resource }
@@ -203,20 +203,34 @@ sections:
       - id: config-example
         type: code_example
         title: A configuration without secrets
-        estimated_minutes: 3
+        estimated_minutes: 4
         body: |
-          VS Code reads the MCP servers of a project from `.mcp.json` in the root of the project
-          folder, the same file other agents read. Each entry under `mcpServers` needs only a
-          transport type and a URL; `tools` lists which of the server's tools the agent may use.
+          Every agent keeps its MCP servers in a small configuration file in your project. The
+          file name and the top-level key differ per agent, but each entry says the same three
+          things: a **name** for the server, the **transport** (HTTP, because the platform is a
+          remote server) and the **URL** of the endpoint. Pick the file of the agent you use;
+          the panel in the next steps shows it with the right URL for you.
 
-          Notice what is **not** in it: no token, no `Authorization` header and no `inputs`
-          prompt. The platform supports OAuth, so your editor signs you in through the browser
-          and keeps the credentials itself. That makes the file safe to commit.
+          Notice what is **not** in any of them: no token, no `Authorization` header and no
+          prompt for a secret. The platform supports OAuth, so your agent signs you in through
+          the browser and keeps the credentials itself. That makes the file safe to commit.
         config:
           snippets:
             - filename: .mcp.json
               language: json
-              caption: Credentials come from signing in, never from the file.
+              caption: Claude Code (terminal, desktop app or IDE extension) reads `.mcp.json` in the project root.
+              code: |
+                {
+                  "mcpServers": {
+                    "learning-platform": {
+                      "type": "http",
+                      "url": "http://localhost:8080/mcp"
+                    }
+                  }
+                }
+            - filename: .mcp.json
+              language: json
+              caption: VS Code with GitHub Copilot reads the same file; `tools` lists which tools the agent may use.
               code: |
                 {
                   "mcpServers": {
@@ -227,13 +241,44 @@ sections:
                     }
                   }
                 }
+            - filename: opencode.json
+              language: json
+              caption: OpenCode calls remote servers `remote` and keeps them under `mcp`.
+              code: |
+                {
+                  "$schema": "https://opencode.ai/config.json",
+                  "mcp": {
+                    "learning-platform": {
+                      "type": "remote",
+                      "url": "http://localhost:8080/mcp",
+                      "enabled": true
+                    }
+                  }
+                }
+            - filename: .cursor/mcp.json
+              language: json
+              caption: Cursor recognises a remote server by its `url`.
+              code: |
+                {
+                  "mcpServers": {
+                    "learning-platform": {
+                      "url": "http://localhost:8080/mcp"
+                    }
+                  }
+                }
+            - filename: .codex/config.toml
+              language: toml
+              caption: Codex uses TOML. `codex mcp add learning-platform --url …` writes this for you.
+              code: |
+                [mcp_servers.learning-platform]
+                url = "http://localhost:8080/mcp"
 
       - id: config-blanks
         type: interactive_exercise
         title: Complete the server entry
         estimated_minutes: 2
         config:
-          prompt: Fill in the missing values of the configuration.
+          prompt: Fill in the missing values of this `.mcp.json` (the format Claude Code, VS Code and Cursor share).
           template: |
             {
               "{{root}}": {
@@ -259,19 +304,23 @@ sections:
         title: Sign in and call a tool
         estimated_minutes: 5
         body: |
-          1. Save the configuration as `.mcp.json` in the root of your project folder and open
-             that folder in VS Code.
-          2. Start a chat in agent mode. The `learning-platform` server shows that it needs
-             authentication. Choose **Authenticate** in the server's actions.
+          1. Choose your agent in the panel below. Save the configuration it shows in your
+             project folder, under the file name it shows.
+          2. Start (or restart) your agent in that folder. It sees the `learning-platform` server
+             and notices that it needs you to sign in; the panel says where to start that.
           3. Your browser opens this platform and asks you to allow access. Sign in if needed,
-             then select **Allow**. Return to VS Code once it says you can close the tab.
+             then select **Allow**. Return to your agent once the page says you can close it.
           4. Ask your agent: **"Use the learning platform to show my current step."**
 
           Your agent calls `get_current_step`. As soon as it does, this step completes.
         help: |
-          If the server doesn't show up, check the file name and location (`.mcp.json` in the root of
-          the opened folder), the `mcpServers` key and the JSON syntax. If sign-in doesn't start, check that the URL ends in
-          /mcp. Ask what the editor's MCP output or log shows.
+          Ask which agent the learner uses. If the server doesn't show up, check the file name and
+          location for that agent (.mcp.json for Claude Code and VS Code, opencode.json for
+          OpenCode, .cursor/mcp.json for Cursor, ~/.codex/config.toml for Codex), the top-level key
+          and the syntax. Most agents only read the file at start, so restart it. If sign-in
+          doesn't start, check that the URL ends in /mcp and ask what the agent's MCP status or log
+          shows (/mcp in Claude Code, "MCP: List Servers" in VS Code, `opencode mcp list`,
+          `codex mcp list`).
         config:
           server_name: learning-platform
         validation:
@@ -313,25 +362,48 @@ sections:
         title: Let your agent submit the configuration
         estimated_minutes: 3
         body: |
-          Ask your agent: **"Submit my .mcp.json to the learning platform for step
-          verify-config."** It calls `report_task_result` with the file.
+          Ask your agent: **"Submit my MCP configuration file to the learning platform for step
+          verify-config."** It calls `report_task_result` with the file: `.mcp.json`,
+          `opencode.json`, `.cursor/mcp.json` or `.vscode/mcp.json`. Codex keeps its
+          configuration in your home folder; let it submit the `learning-platform` part as
+          `.codex/config.toml`.
 
           The platform checks that the server uses HTTP, points at `/mcp`, and that no
           credentials are hardcoded in the file. Commit your work afterwards.
         config:
-          file: .mcp.json
-          format: json
+          variants:
+            - { file: .mcp.json, format: json, label: "Claude Code, VS Code" }
+            - { file: .vscode/mcp.json, format: json, label: VS Code }
+            - { file: opencode.json, format: json, label: OpenCode }
+            - { file: .cursor/mcp.json, format: json, label: Cursor }
+            - { file: .codex/config.toml, format: toml, label: Codex }
         validation:
-          rules:
-            - pointer: /mcpServers/*/type
-              equals: http
-              label: The server uses the HTTP transport
-            - pointer: /mcpServers/*/url
-              contains: /mcp
-              label: The URL points at the MCP endpoint
-            - pointer: /mcpServers/*/headers/Authorization
-              absent: true
-              label: No token is hardcoded; the agent signs in with OAuth instead
+          variants:
+            - file: .mcp.json
+              rules:
+                - { pointer: /mcpServers/*/type, equals: http, label: The server uses the HTTP transport }
+                - { pointer: /mcpServers/*/url, contains: /mcp, label: The URL points at the MCP endpoint }
+                - { pointer: /mcpServers/*/headers/Authorization, absent: true, label: "No token is hardcoded; the agent signs in with OAuth instead" }
+            - file: .vscode/mcp.json
+              rules:
+                - { pointer: /servers/*/type, equals: http, label: The server uses the HTTP transport }
+                - { pointer: /servers/*/url, contains: /mcp, label: The URL points at the MCP endpoint }
+                - { pointer: /servers/*/headers/Authorization, absent: true, label: "No token is hardcoded; the agent signs in with OAuth instead" }
+            - file: opencode.json
+              rules:
+                - { pointer: /mcp/*/type, equals: remote, label: The server is a remote (HTTP) server }
+                - { pointer: /mcp/*/url, contains: /mcp, label: The URL points at the MCP endpoint }
+                - { pointer: /mcp/*/headers/Authorization, absent: true, label: "No token is hardcoded; the agent signs in with OAuth instead" }
+            - file: .cursor/mcp.json
+              rules:
+                - { pointer: /mcpServers/*/url, contains: /mcp, label: The URL points at the MCP endpoint }
+                - { pointer: /mcpServers/*/command, absent: true, label: The server is reached over HTTP instead of started as a command }
+                - { pointer: /mcpServers/*/headers/Authorization, absent: true, label: "No token is hardcoded; the agent signs in with OAuth instead" }
+            - file: .codex/config.toml
+              rules:
+                - { pointer: /mcp_servers/*/url, contains: /mcp, label: The URL points at the MCP endpoint }
+                - { pointer: /mcp_servers/*/command, absent: true, label: The server is reached over HTTP instead of started as a command }
+                - { pointer: /mcp_servers/*/bearer_token, absent: true, label: "No token is hardcoded; the agent signs in with OAuth instead" }
 
   - id: wrap-up
     title: Wrap up

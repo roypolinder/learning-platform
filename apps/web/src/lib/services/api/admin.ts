@@ -1,5 +1,6 @@
 import type {
     AdminCourse,
+    AdminUsersResponse,
     AdminCourseDetail,
     AuthoringGuide,
     CourseValidationReport,
@@ -14,5 +15,10 @@ export const adminApi = {
     validate: (source: string) => api.post<CourseValidationReport>('/admin/courses/validate', { source }),
     publish: (source: string) => api.post<PublishResult>('/admin/courses', { source }),
     guide: () => api.get<AuthoringGuide>('/admin/authoring-guide'),
-    trafficReport: () => api.get<TrafficReport>('/admin/traffic-report')
+    trafficReport: () => api.get<TrafficReport>('/admin/traffic-report'),
+    users: (params: { q?: string; status?: 'verified' | 'unverified'; page?: number; per_page?: number }) => {
+        const query = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) if (value) query.set(key, String(value));
+        return api.get<AdminUsersResponse>(`/admin/users?${query}`);
+    }
 };
