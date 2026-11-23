@@ -71,6 +71,7 @@ impl SmtpMailer {
     /// `url` follows lettre's format: `smtps://user:pass@host:465` (implicit TLS) or
     /// `smtp://user:pass@host:587?tls=required` (STARTTLS).
     pub fn new(url: &str, from: &str) -> Result<Self, MailError> {
+        check_smtp_url(url)?;
         let transport = AsyncSmtpTransport::<Tokio1Executor>::from_url(url)
             .map_err(|error| MailError::Config(format!("SMTP_URL: {error}")))?
             .build();
@@ -79,6 +80,24 @@ impl SmtpMailer {
             .map_err(|error| MailError::Config(format!("MAIL_FROM: {error}")))?;
         Ok(Self { transport, from })
     }
+}
+
+/// Catches common mistakes with a clear message. Never echoes the URL: it holds the password.
+fn check_smtp_url(url: &str) -> Result<(), MailError> {
+    let problem = if !(url.starts_with("smtps://") || url.starts_with("smtp://")) {
+        let start: String = url.chars().take_while(|c| *c != ':' && *c != '/').collect();
+        Some(format!(
+            "SMTP_URL must start with smtps:// or smtp://, but starts with `{start}`. \
+             Check for a duplicated `SMTP_URL=` or quotes in the configuration file"
+        ))
+    } else if !url.contains('@') {
+        Some("SMTP_URL needs credentials: smtps://USER:PASSWORD@HOST:465".into())
+    } else if url.matches('@').count() > 1 {
+        Some("SMTP_URL contains more than one `@`; write the `@` in the user name as %40".into())
+    } else {
+        None
+    };
+    problem.map_or(Ok(()), |problem| Err(MailError::Config(problem)))
 }
 
 #[async_trait]
@@ -142,5 +161,27 @@ impl Mailer for MemoryMailer {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .push(email);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn explains_broken_smtp_urls_without_leaking_the_password() {
+        let error = |url: &str| check_smtp_url(url).unwrap_err().to_string();
+        let duplicated = error("SMTP_URL=smtps://a%40b.nl:secret@smtp.x:465");
+        assert!(
+            duplicated.contains("starts with `SMTP_URL=smtps`"),
+            "{duplicated}"
+        );
+        assert!(!duplicated.contains("secret"));
+        assert!(error("smtps://a@b.nl:secret@smtp.x:465").contains("%40"));
+        assert!(error("smtps://smtp.x:465").contains("credentials"));
+        assert!(check_smtp_url("smtps://a%40b.nl:p%24ss@smtp.transip.email:465").is_ok());
+        assert!(
+            SmtpMailer::new("smtps://a%40b.nl:pw@smtp.transip.email:465", "LP <a@b.nl>").is_ok()
+        );
     }
 }
